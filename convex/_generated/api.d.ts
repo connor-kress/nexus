@@ -17,6 +17,7 @@ import type * as auth from "../auth.js";
 import type * as chats from "../chats.js";
 import type * as http from "../http.js";
 import type * as messages from "../messages.js";
+import type * as migrations from "../migrations.js";
 import type * as notes from "../notes.js";
 import type * as projects from "../projects.js";
 import type * as router from "../router.js";
@@ -35,6 +36,7 @@ declare const fullApi: ApiFromModules<{
   chats: typeof chats;
   http: typeof http;
   messages: typeof messages;
+  migrations: typeof migrations;
   notes: typeof notes;
   projects: typeof projects;
   router: typeof router;
