@@ -25,6 +25,13 @@ const applicationTables = {
     projectId: v.id("projects"),
     title: v.string(),
     body: v.string(),
+    status: v.optional(
+      v.union(
+        v.literal("pending"),
+        v.literal("accepted"),
+        v.literal("rejected"),
+      ),
+    ),
   }).index("by_project", ["projectId"]),
 
   // Tags catalog per project (normalized)

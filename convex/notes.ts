@@ -8,6 +8,13 @@ const noteValidator = v.object({
   projectId: v.id("projects"),
   title: v.string(),
   body: v.string(),
+  status: v.optional(
+    v.union(
+      v.literal("pending"),
+      v.literal("accepted"),
+      v.literal("rejected"),
+    ),
+  ),
 });
 
 const tagValidator = v.object({
@@ -23,6 +30,13 @@ export const create = mutation({
     title: v.string(),
     body: v.string(),
     tagNames: v.optional(v.array(v.string())),
+    status: v.optional(
+      v.union(
+        v.literal("pending"),
+        v.literal("accepted"),
+        v.literal("rejected"),
+      ),
+    ),
   },
   returns: v.id("notes"),
   handler: async (ctx, args) => {
@@ -41,6 +55,7 @@ export const create = mutation({
       projectId: args.projectId,
       title: args.title,
       body: args.body,
+      status: args.status ?? "pending",
     });
 
     if (args.tagNames && args.tagNames.length > 0) {
