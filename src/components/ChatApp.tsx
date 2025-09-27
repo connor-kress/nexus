@@ -1,4 +1,3 @@
-// app/components/ChatApp.tsx
 import { useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
@@ -9,7 +8,6 @@ import { SignOutButton } from "../SignOutButton";
 import GraphPanel from "./Graph";
 import NodeSummaryPanel from "./NodeSummary";
 
-// shadcn/ui resizable
 import {
   ResizablePanelGroup,
   ResizablePanel,
@@ -54,6 +52,48 @@ export function ChatApp() {
   );
   const user = useQuery(api.auth.loggedInUser);
 
+  //this is just mock data
+  const proposedNodes = [
+    {
+      id: "n1",
+      title: "Add project-scoped roles",
+      summary:
+        "Discussed why JWT role claims can’t be trusted. Proposed class-level role assignments.",
+      createdAt: new Date(),
+      tokens: 320,
+    },
+    {
+      id: "n2",
+      title: "UI Layout Split",
+      summary:
+        "Plan to split layout into Sidebar, Chat, Graph, NodeSummary with resizable panels.",
+      createdAt: new Date(),
+      tokens: 210,
+    },
+  ];
+
+  const acceptedNodes = [
+    {
+      id: "n3",
+      title: "Assignment Model Schema",
+      summary:
+        "Assignment includes Title, Description, Settings, LessonID, UserID.",
+      createdAt: new Date(),
+      tokens: 150,
+    },
+  ];
+
+  // 🔹 Mock handlers
+  const handleSaveOne = (id: string) => {
+    console.log("Saved node:", id);
+  };
+  const handleRejectOne = (id: string) => {
+    console.log("Rejected node:", id);
+  };
+  const handleSaveMany = (ids: string[]) => {
+    console.log("Saved ALL:", ids);
+  };
+
   return (
     <div className="h-screen bg-gray-100">
       <ResizablePanelGroup direction="horizontal" className="h-full">
@@ -97,6 +137,7 @@ export function ChatApp() {
 
         <ResizableHandle withHandle />
 
+        {/* Graph + Node Summary */}
         <ResizablePanel
           defaultSize={26}
           minSize={20}
@@ -116,7 +157,13 @@ export function ChatApp() {
               minSize={25}
               className="bg-gray-50"
             >
-              <NodeSummaryPanel />
+              <NodeSummaryPanel
+                proposedNodes={proposedNodes}
+                acceptedNodes={acceptedNodes}
+                onSaveOne={handleSaveOne}
+                onRejectOne={handleRejectOne}
+                onSaveMany={handleSaveMany}
+              />
             </ResizablePanel>
           </ResizablePanelGroup>
         </ResizablePanel>
