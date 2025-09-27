@@ -25,18 +25,32 @@ const applicationTables = {
     projectId: v.id("projects"),
     title: v.string(),
     body: v.string(),
+    status: v.optional(
+      v.union(
+        v.literal("pending"),
+        v.literal("accepted"),
+        v.literal("rejected"),
+      ),
+    ),
   }).index("by_project", ["projectId"]),
 
-  // Tags: simple denormalized per note
+  // Tags catalog per project (normalized)
   tags: defineTable({
-    noteId: v.id("notes"),
     projectId: v.id("projects"),
     name: v.string(),
   })
+    .index("by_project_and_name", ["projectId", "name"]) 
+    .index("by_project", ["projectId"]) 
+    .index("by_name", ["name"]),
+
+  // Note-Tag relation
+  notesTags: defineTable({
+    noteId: v.id("notes"),
+    tagId: v.id("tags"),
+  })
     .index("by_note", ["noteId"]) 
-    .index("by_name", ["name"]) 
-    .index("by_note_and_name", ["noteId", "name"]) 
-    .index("by_project_and_name", ["projectId", "name"]),
+    .index("by_tag", ["tagId"]) 
+    .index("by_note_and_tag", ["noteId", "tagId"]),
 
   // Memberships: many users per project
   projectUsers: defineTable({
