@@ -85,7 +85,7 @@ export const sendMessage = action({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "meta-llama/llama-3.2-3b-instruct:free", // Free model
+          model: "x-ai/grok-4-fast:free", // Free model
           messages: openRouterMessages,
           temperature: 0.7,
         }),
