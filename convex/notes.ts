@@ -331,6 +331,27 @@ export const getWithTags = query({
   },
 });
 
+export const updateBody = mutation({
+  args: { id: v.id("notes"), body: v.string() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+    const note = await ctx.db.get(args.id);
+    if (!note) throw new Error("Note not found");
+    const membership = await ctx.db
+      .query("projectUsers")
+      .withIndex("by_user_and_project", (q) =>
+        q.eq("userId", userId).eq("projectId", note.projectId)
+      )
+      .unique()
+      .catch(() => null);
+    if (!membership) throw new Error("Forbidden");
+    await ctx.db.patch(args.id, { body: args.body });
+    return null;
+  },
+});
+
 export const setStatus = mutation({
   args: {
     noteId: v.id("notes"),
@@ -403,5 +424,88 @@ export const review = action({
       approved: args.approveIds.length,
       rejected: args.rejectIds.length,
     };
+  },
+});
+
+export const graphForProject = query({
+  args: { projectId: v.id("projects") },
+  returns: v.object({
+    nodes: v.array(
+      v.object({
+        id: v.string(),
+        kind: v.union(v.literal("note"), v.literal("tag")),
+        title: v.string(),
+        body: v.optional(v.string()),
+        noteId: v.optional(v.id("notes")),
+      })
+    ),
+    edges: v.array(
+      v.object({
+        id: v.string(),
+        source: v.string(),
+        target: v.string(),
+      })
+    ),
+  }),
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return { nodes: [], edges: [] };
+    const membership = await ctx.db
+      .query("projectUsers")
+      .withIndex("by_user_and_project", (q) =>
+        q.eq("userId", userId).eq("projectId", args.projectId)
+      )
+      .unique()
+      .catch(() => null);
+    if (!membership) return { nodes: [], edges: [] };
+    const notes = await ctx.db
+      .query("notes")
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+      .order("desc")
+      .collect();
+    const noteIdToTagNames: Record<string, Set<string>> = {};
+    const tagNamesInProject: Set<string> = new Set();
+    for (const note of notes) {
+      const rels = await ctx.db
+        .query("notesTags")
+        .withIndex("by_note", (q) => q.eq("noteId", note._id))
+        .collect();
+      for (const rel of rels) {
+        const tag = await ctx.db.get(rel.tagId);
+        if (!tag) continue;
+        const key = String(note._id);
+        if (!noteIdToTagNames[key]) noteIdToTagNames[key] = new Set();
+        noteIdToTagNames[key].add(tag.name);
+        tagNamesInProject.add(tag.name);
+      }
+    }
+    const nodes: Array<{
+      id: string;
+      kind: "note" | "tag";
+      title: string;
+      body?: string;
+      noteId?: any;
+    }> = [];
+    const edges: Array<{ id: string; source: string; target: string }> = [];
+    for (const name of tagNamesInProject) {
+      nodes.push({ id: `tag:${name}`, kind: "tag", title: name });
+    }
+    for (const note of notes) {
+      const noteNodeId = `note:${String(note._id)}`;
+      nodes.push({
+        id: noteNodeId,
+        kind: "note",
+        title: note.title,
+        body: note.body,
+        noteId: note._id,
+      });
+      const tagNames = noteIdToTagNames[String(note._id)] ?? new Set<string>();
+      for (const name of tagNames) {
+        const tagNodeId = `tag:${name}`;
+        const edgeId = `e:${noteNodeId}|${tagNodeId}`;
+        edges.push({ id: edgeId, source: noteNodeId, target: tagNodeId });
+      }
+    }
+    return { nodes, edges };
   },
 });

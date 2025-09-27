@@ -50,6 +50,9 @@ export function ChatApp() {
   const [selectedChatId, setSelectedChatId] = useState<Id<"chats"> | null>(
     null
   );
+  const [selectedNoteId, setSelectedNoteId] = useState<Id<"notes"> | null>(
+    null
+  );
   const user = useQuery(api.auth.loggedInUser);
 
   return (
@@ -75,7 +78,10 @@ export function ChatApp() {
               <Sidebar
                 selectedProjectId={selectedProjectId}
                 selectedChatId={selectedChatId}
-                onProjectSelect={setSelectedProjectId}
+                onProjectSelect={(p) => {
+                  setSelectedProjectId(p);
+                  setSelectedNoteId(null);
+                }}
                 onChatSelect={setSelectedChatId}
               />
             </div>
@@ -111,7 +117,10 @@ export function ChatApp() {
               className="border-b bg-gray-50 min-h-0 overflow-hidden"
             >
               <div className="h-full overflow-hidden">
-                <GraphPanel />
+                <GraphPanel
+                  projectId={selectedProjectId}
+                  onSelectNote={setSelectedNoteId}
+                />
               </div>
             </ResizablePanel>
             <ResizableHandle withHandle />
@@ -122,7 +131,11 @@ export function ChatApp() {
             >
               <div className="h-full overflow-hidden">
                 {selectedProjectId ? (
-                  <NotesSection projectId={selectedProjectId} />
+                  <NotesSection
+                    projectId={selectedProjectId}
+                    selectedNoteId={selectedNoteId}
+                    onClear={() => setSelectedNoteId(null)}
+                  />
                 ) : (
                   <NodeSummaryPanel
                     proposedNodes={[]}
@@ -141,7 +154,15 @@ export function ChatApp() {
   );
 }
 
-function NotesSection({ projectId }: { projectId: Id<"projects"> }) {
+function NotesSection({
+  projectId,
+  selectedNoteId,
+  onClear,
+}: {
+  projectId: Id<"projects">;
+  selectedNoteId: Id<"notes"> | null;
+  onClear: () => void;
+}) {
   const { pending, accepted } = useNotesByStatus(projectId);
   const reviewNotes = useAction(api.notes.review);
 
@@ -214,6 +235,8 @@ function NotesSection({ projectId }: { projectId: Id<"projects"> }) {
       onSaveOne={handleSaveOne}
       onRejectOne={handleRejectOne}
       onSaveMany={handleSaveMany}
+      selectedNoteId={selectedNoteId}
+      onClear={onClear}
     />
   );
 }
