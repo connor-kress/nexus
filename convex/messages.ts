@@ -11,12 +11,14 @@ export const list = query({
       return [];
     }
 
-    // Verify membership via chat's project
     const chat = await ctx.db.get(args.chatId);
     if (!chat) return [];
+
     const membership = await ctx.db
       .query("projectUsers")
-      .withIndex("by_user_and_project", (q) => q.eq("userId", userId).eq("projectId", chat.projectId))
+      .withIndex("by_user_and_project", (q) =>
+        q.eq("userId", userId).eq("projectId", chat.projectId)
+      )
       .unique()
       .catch(() => null);
     if (!membership) return [];
@@ -41,21 +43,23 @@ export const add = mutation({
       throw new Error("Not authenticated");
     }
 
-    // Verify membership via chat's project
     const chat = await ctx.db.get(args.chatId);
     if (!chat) throw new Error("Chat not found");
+
     const membership = await ctx.db
       .query("projectUsers")
-      .withIndex("by_user_and_project", (q) => q.eq("userId", userId).eq("projectId", chat.projectId))
+      .withIndex("by_user_and_project", (q) =>
+        q.eq("userId", userId).eq("projectId", chat.projectId)
+      )
       .unique()
       .catch(() => null);
-    if (!membership) throw new Error("Chat not found");
+    if (!membership) throw new Error("Forbidden");
 
     return await ctx.db.insert("messages", {
       chatId: args.chatId,
       content: args.content,
       role: args.role,
-      userId,
+      userId: userId,
     });
   },
 });
@@ -66,53 +70,111 @@ export const sendMessage = action({
     content: v.string(),
   },
   handler: async (ctx, args): Promise<string | null> => {
-    // Add user message
     await ctx.runMutation(api.messages.add, {
       chatId: args.chatId,
       content: args.content,
       role: "user",
     });
 
-    // Get chat history for context
-    const messages: Array<{ role: "user" | "assistant"; content: string }> = await ctx.runQuery(api.messages.list, {
-      chatId: args.chatId,
-    });
+    const messages: Array<{ role: "user" | "assistant"; content: string }> =
+      await ctx.runQuery(api.messages.list, {
+        chatId: args.chatId,
+      });
 
-    // Prepare messages for OpenRouter
-    const openRouterMessages: Array<{ role: string; content: string }> = messages.map((msg) => ({
-      role: msg.role,
-      content: msg.content,
-    }));
+    const openRouterMessages: Array<{ role: string; content: string }> =
+      messages.map((msg) => ({
+        role: msg.role,
+        content: msg.content,
+      }));
 
     try {
-      // Call OpenRouter API
-      const response: Response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "x-ai/grok-4-fast:free", // Free model
-          messages: openRouterMessages,
-          temperature: 0.7,
-        }),
-      });
+      const response: Response = await fetch(
+        "https://openrouter.ai/api/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "x-ai/grok-4-fast:free",
+            messages: openRouterMessages,
+            temperature: 0.7,
+          }),
+        }
+      );
 
       if (!response.ok) {
         throw new Error(`OpenRouter API error: ${response.statusText}`);
       }
 
       const data: any = await response.json();
-      const assistantMessage: string | undefined = data.choices[0]?.message?.content;
+      const assistantMessage: string | undefined =
+        data.choices[0]?.message?.content;
 
       if (assistantMessage) {
-        // Add assistant response
         await ctx.runMutation(api.messages.add, {
           chatId: args.chatId,
           content: assistantMessage,
           role: "assistant",
         });
+
+        const chat = await ctx.runQuery(api.chats.get, { id: args.chatId });
+        const allMessages: Array<{
+          role: "user" | "assistant";
+          content: string;
+        }> = await ctx.runQuery(api.messages.list, { chatId: args.chatId });
+        const summaryPrompt = [
+          {
+            role: "system",
+            content:
+              'You produce compact JSON for a knowledge note. Respond only JSON with shape {"title":string,"body":string,"tags":string[]}. Title <= 80 chars. Body is a short paragraph or 3–6 bullets with key decisions, facts, next steps. Tags are 1–5 lowercase keywords.',
+          },
+          ...allMessages.map((m) => ({ role: m.role, content: m.content })),
+          {
+            role: "user",
+            content: `Create a note highlighting the latest user message: """${args.content}"""`,
+          },
+        ];
+        const sumRes: Response = await fetch(
+          "https://openrouter.ai/api/v1/chat/completions",
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              model: "x-ai/grok-4-fast:free",
+              messages: summaryPrompt,
+              temperature: 0.2,
+            }),
+          }
+        );
+        if (sumRes.ok) {
+          const sumData: any = await sumRes.json();
+          const raw = sumData.choices?.[0]?.message?.content ?? "";
+          let parsed: { title?: string; body?: string; tags?: string[] } = {};
+          try {
+            parsed = JSON.parse(raw);
+          } catch {
+            parsed = { title: "Chat summary", body: raw, tags: [] };
+          }
+          const title = (parsed.title ?? "Chat summary").slice(0, 80);
+          const body = (parsed.body ?? "").trim();
+          const tagNames = Array.isArray(parsed.tags)
+            ? parsed.tags
+                .map((t) => String(t).toLowerCase().trim())
+                .filter((t) => t.length > 0)
+                .slice(0, 5)
+            : [];
+          await ctx.runMutation(api.notes.create, {
+            projectId: chat.projectId,
+            title,
+            body,
+            tagNames,
+          });
+        }
       }
 
       return assistantMessage || null;
