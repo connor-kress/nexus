@@ -15,9 +15,11 @@
     "ai": "^5.0.56",
     "clsx": "^2.1.1",
     "convex": "^1.24.2",
+    "lucide-react": "^0.544.0",
     "openai": "^5.23.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-resizable-panels": "^3.0.6",
     "sonner": "^2.0.3",
     "tailwind-merge": "^3.1.0"
   },
