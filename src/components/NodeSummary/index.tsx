@@ -20,7 +20,6 @@ type Props = {
   onSaveMany?: (ids: string[]) => Promise<void> | void;
   onTabChange?: (tab: "proposed" | "accepted") => void;
   className?: string;
-  // Existing note details props
   selectedNoteId?: Id<"notes"> | null;
   onClear?: () => void;
 };
@@ -53,19 +52,19 @@ export default function NodeSummaryPanel({
     }
   };
 
-  // Existing note details functionality
   const data = useQuery(
     api.notes.getWithTags,
     selectedNoteId ? { id: selectedNoteId } : "skip"
   );
   const updateBody = useMutation(api.notes.updateBody);
   const [bodyDraft, setBodyDraft] = React.useState<string>("");
+
   const note = data?.note;
   const tags = data?.tags ?? [];
 
   React.useEffect(() => {
     setBodyDraft(note?.body ?? "");
-  }, [note?._id]);
+  }, [note?._id, note?.body]);
 
   const handleSave = async () => {
     if (!note) return;
@@ -78,128 +77,30 @@ export default function NodeSummaryPanel({
       <div className="text-sm font-medium text-gray-600 mb-2">Node Summary</div>
 
       <div className="flex-1 min-h-0 rounded-xl border border-gray-200 bg-white shadow-sm flex flex-col">
-        <Tabs
-          value={tab}
-          onValueChange={(v) => setTab(v as "proposed" | "accepted")}
-          className="flex-1 flex flex-col min-h-0"
-        >
-          <div className="border-b px-3 pt-3">
-            <TabsList>
-              <TabsTrigger value="proposed">
-                Proposed
-                <Badge className="ml-2">{proposedNodes?.length}</Badge>
-              </TabsTrigger>
-              <TabsTrigger value="accepted">
-                Accepted
-                <Badge className="ml-2">{acceptedNodes?.length}</Badge>
-              </TabsTrigger>
-            </TabsList>
-          </div>
-
-          <TabsContent
-            value="proposed"
-            className="flex-1 flex flex-col min-h-0 p-0 data-[state=inactive]:hidden"
-          >
-            <ScrollArea className="flex-1 h-0 px-3 py-3">
-              {proposedNodes.length === 0 ? (
-                <p className="text-sm text-gray-500">No proposed nodes yet.</p>
-              ) : (
-                <div className="space-y-3">
-                  {proposedNodes.map((n) => (
-                    <NodeCard
-                      key={n.id}
-                      node={n}
-                      variant="proposed"
-                      onSave={onSaveOne}
-                      onReject={onRejectOne}
-                    />
-                  ))}
-                </div>
-              )}
-            </ScrollArea>
-
-            <div className="border-t bg-white px-3 py-3 flex items-center justify-between">
-              <span className="text-xs text-gray-500">
-                {proposedNodes?.length
-                  ? `${proposedNodes?.length} proposed node${proposedNodes?.length > 1 ? "s" : ""}`
-                  : "No proposed nodes"}
-              </span>
-              <Button
-                onClick={handleSaveAll}
-                disabled={!proposedNodes?.length || savingAll}
-              >
-                {savingAll ? "Saving…" : "Save all proposed nodes"}
-              </Button>
-            </div>
-
-            <TabsContent
-              value="proposed"
-              className="flex flex-1 flex-col p-0 data-[state=inactive]:hidden"
-            >
-              <ScrollArea className="flex-1 px-3 py-3">
-                {proposedNodes.length === 0 ? (
-                  <p className="text-sm text-gray-500">No proposed nodes yet.</p>
-                ) : (
-                  <div className="space-y-3">
-                    {proposedNodes.map((n) => (
-                      <NodeCard
-                        key={n.id}
-                        node={n}
-                        variant="proposed"
-                        onSave={onSaveOne}
-                        onReject={onRejectOne}
-                      />
-                    ))}
-                  </div>
-                )}
-              </ScrollArea>
-
-              <div className="border-t bg-white px-3 py-3 flex items-center justify-between">
-                <span className="text-xs text-gray-500">
-                  {proposedNodes?.length
-                    ? `${proposedNodes?.length} proposed node${proposedNodes?.length > 1 ? "s" : ""}`
-                    : "No proposed nodes"}
-                </span>
-                <Button onClick={handleSaveAll} disabled={!proposedNodes?.length || savingAll}>
-                  {savingAll ? "Saving…" : "Save all proposed nodes"}
-                </Button>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="accepted" className="flex-1 p-0 data-[state=inactive]:hidden">
-              <ScrollArea className="h-full px-3 py-3">
-                {acceptedNodes.length === 0 ? (
-                  <p className="text-sm text-gray-500">No accepted nodes yet.</p>
-                ) : (
-                  <div className="space-y-3">
-                    {acceptedNodes.map((n) => (
-                      <NodeCard key={n.id} node={n} variant="accepted" />
-                    ))}
-                  </div>
-                )}
-              </ScrollArea>
-            </TabsContent>
-          </Tabs>
-        ) : (
+        {selectedNoteId && note ? (
           <div className="h-full px-3 py-3">
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <div className="text-xs text-gray-500">Title</div>
-                <button
-                  className="text-xs px-2 py-1 rounded border border-gray-300 text-gray-700"
-                  onClick={onClear}
-                >
-                  Clear
-                </button>
+                {onClear && (
+                  <button
+                    className="text-xs px-2 py-1 rounded border border-gray-300 text-gray-700"
+                    onClick={onClear}
+                  >
+                    Clear
+                  </button>
+                )}
               </div>
-              <div className="text-sm font-medium text-gray-900">{note.title}</div>
+              <div className="text-sm font-medium text-gray-900">
+                {note.title}
+              </div>
               <div>
                 <div className="text-xs text-gray-500 mb-1">Tags</div>
                 <div className="flex flex-wrap gap-1">
                   {tags.length === 0 ? (
                     <span className="text-xs text-gray-400">No tags</span>
                   ) : (
-                    tags.map((t) => (
+                    tags.map((t: { _id: Id<"tags">; name: string }) => (
                       <span
                         key={String(t._id)}
                         className="text-xs bg-gray-100 text-gray-700 px-2 py-0.5 rounded"
@@ -237,6 +138,83 @@ export default function NodeSummaryPanel({
               </div>
             </div>
           </div>
+        ) : (
+          <Tabs
+            value={tab}
+            onValueChange={(v) => setTab(v as "proposed" | "accepted")}
+            className="flex-1 flex flex-col min-h-0"
+          >
+            <div className="border-b px-3 pt-3">
+              <TabsList>
+                <TabsTrigger value="proposed">
+                  Proposed
+                  <Badge className="ml-2">{proposedNodes?.length}</Badge>
+                </TabsTrigger>
+                <TabsTrigger value="accepted">
+                  Accepted
+                  <Badge className="ml-2">{acceptedNodes?.length}</Badge>
+                </TabsTrigger>
+              </TabsList>
+            </div>
+
+            <TabsContent
+              value="proposed"
+              className="flex-1 flex flex-col min-h-0 p-0 data-[state=inactive]:hidden"
+            >
+              <ScrollArea className="flex-1 h-0 px-3 py-3">
+                {proposedNodes.length === 0 ? (
+                  <p className="text-sm text-gray-500">
+                    No proposed nodes yet.
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {proposedNodes.map((n) => (
+                      <NodeCard
+                        key={n.id}
+                        node={n}
+                        variant="proposed"
+                        onSave={onSaveOne}
+                        onReject={onRejectOne}
+                      />
+                    ))}
+                  </div>
+                )}
+              </ScrollArea>
+
+              <div className="border-t bg-white px-3 py-3 flex items-center justify-between">
+                <span className="text-xs text-gray-500">
+                  {proposedNodes?.length
+                    ? `${proposedNodes?.length} proposed node${proposedNodes?.length > 1 ? "s" : ""}`
+                    : "No proposed nodes"}
+                </span>
+                <Button
+                  onClick={handleSaveAll}
+                  disabled={!proposedNodes?.length || savingAll}
+                >
+                  {savingAll ? "Saving…" : "Save all proposed nodes"}
+                </Button>
+              </div>
+            </TabsContent>
+
+            <TabsContent
+              value="accepted"
+              className="flex-1 flex flex-col min-h-0 p-0 data-[state=inactive]:hidden"
+            >
+              <ScrollArea className="flex-1 h-0 px-3 py-3">
+                {acceptedNodes.length === 0 ? (
+                  <p className="text-sm text-gray-500">
+                    No accepted nodes yet.
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {acceptedNodes.map((n) => (
+                      <NodeCard key={n.id} node={n} variant="accepted" />
+                    ))}
+                  </div>
+                )}
+              </ScrollArea>
+            </TabsContent>
+          </Tabs>
         )}
       </div>
     </div>

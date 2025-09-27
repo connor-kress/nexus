@@ -14,8 +14,13 @@ function GraphPanel({ projectId, onSelectNote }: GraphPanelProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const sigmaRef = useRef<Sigma | null>(null);
   const graphRef = useRef<Graph | null>(null);
-  const [hoverInfo, setHoverInfo] = useState<{ title: string; description?: string } | null>(null);
-  const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null);
+  const [hoverInfo, setHoverInfo] = useState<{
+    title: string;
+    description?: string;
+  } | null>(null);
+  const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(
+    null
+  );
 
   // Periodic refresh can be added by caller via prop changes; simple polling interval left to the app.
   const graphData = useQuery(
@@ -49,7 +54,8 @@ function GraphPanel({ projectId, onSelectNote }: GraphPanelProps) {
         const nKind = g.getNodeAttribute(node, "kind");
         if (nKind !== "note") return;
         const title: string = g.getNodeAttribute(node, "label");
-        const description: string | null = g.getNodeAttribute(node, "body") ?? null;
+        const description: string | null =
+          g.getNodeAttribute(node, "body") ?? null;
         setHoverInfo({ title, description: description ?? undefined });
       });
 
@@ -94,7 +100,8 @@ function GraphPanel({ projectId, onSelectNote }: GraphPanelProps) {
       if (g.hasNode(e.source) && g.hasNode(e.target)) {
         if (!g.hasEdge(e.source, e.target)) {
           // best-effort unique key
-          g.addEdgeWithKey?.(e.id, e.source, e.target) ?? g.addEdge(e.source, e.target);
+          g.addEdgeWithKey?.(e.id, e.source, e.target) ??
+            g.addEdge(e.source, e.target);
         }
       }
     }
@@ -119,7 +126,9 @@ function GraphPanel({ projectId, onSelectNote }: GraphPanelProps) {
             className="absolute z-10 max-w-xs rounded-md border border-gray-200 bg-white shadow px-3 py-2 text-xs text-gray-800"
             style={{ left: mousePos.x + 12, top: mousePos.y + 12 }}
           >
-            <div><span className="font-semibold">Title:</span> {hoverInfo.title}</div>
+            <div>
+              <span className="font-semibold">Title:</span> {hoverInfo.title}
+            </div>
             {hoverInfo.description ? (
               <div className="mt-1">
                 <span className="font-semibold">Description:</span>{" "}
