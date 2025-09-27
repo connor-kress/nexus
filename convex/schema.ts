@@ -29,8 +29,8 @@ const applicationTables = {
       v.union(
         v.literal("pending"),
         v.literal("accepted"),
-        v.literal("rejected"),
-      ),
+        v.literal("rejected")
+      )
     ),
   }).index("by_project", ["projectId"]),
 
@@ -39,8 +39,8 @@ const applicationTables = {
     projectId: v.id("projects"),
     name: v.string(),
   })
-    .index("by_project_and_name", ["projectId", "name"]) 
-    .index("by_project", ["projectId"]) 
+    .index("by_project_and_name", ["projectId", "name"])
+    .index("by_project", ["projectId"])
     .index("by_name", ["name"]),
 
   // Note-Tag relation
@@ -48,21 +48,18 @@ const applicationTables = {
     noteId: v.id("notes"),
     tagId: v.id("tags"),
   })
-    .index("by_note", ["noteId"]) 
-    .index("by_tag", ["tagId"]) 
+    .index("by_note", ["noteId"])
+    .index("by_tag", ["tagId"])
     .index("by_note_and_tag", ["noteId", "tagId"]),
 
   // Memberships: many users per project
   projectUsers: defineTable({
     projectId: v.id("projects"),
     userId: v.id("users"),
-    role: v.union(
-      v.literal("owner"),
-      v.literal("member"),
-    ),
+    role: v.union(v.literal("owner"), v.literal("member")),
   })
-    .index("by_user", ["userId"]) 
-    .index("by_project", ["projectId"]) 
+    .index("by_user", ["userId"])
+    .index("by_project", ["projectId"])
     .index("by_user_and_project", ["userId", "projectId"]),
 
   // Project invitations referencing users via foreign key
@@ -70,13 +67,11 @@ const applicationTables = {
     projectId: v.id("projects"),
     userId: v.id("users"),
     invitedBy: v.id("users"),
-    status: v.optional(v.union(
-      v.literal("pending"),
-      v.literal("accepted"),
-      v.literal("revoked"),
-    )),
+    status: v.optional(
+      v.union(v.literal("pending"), v.literal("accepted"), v.literal("revoked"))
+    ),
   })
-    .index("by_project_and_user", ["projectId", "userId"]) 
+    .index("by_project_and_user", ["projectId", "userId"])
     .index("by_user", ["userId"]),
 };
 

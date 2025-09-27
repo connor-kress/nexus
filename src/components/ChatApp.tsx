@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useQuery } from "convex/react";
+import { useMemo, useState } from "react";
+import { useQuery, useAction } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import { Sidebar } from "./Sidebar";
@@ -7,12 +7,12 @@ import { ChatInterface } from "./ChatInterface";
 import { SignOutButton } from "../SignOutButton";
 import GraphPanel from "./Graph";
 import NodeSummaryPanel from "./NodeSummary";
-
 import {
   ResizablePanelGroup,
   ResizablePanel,
   ResizableHandle,
 } from "@/components/ui/resizable";
+import { useNotesByStatus } from "./NodeSummary/hooks/useNotes";
 
 function EmptyChat({ email }: { email?: string | null }) {
   return (
@@ -52,66 +52,26 @@ export function ChatApp() {
   );
   const user = useQuery(api.auth.loggedInUser);
 
-  //this is just mock data
-  const proposedNodes = [
-    {
-      id: "n1",
-      title: "Add project-scoped roles",
-      summary:
-        "Discussed why JWT role claims can’t be trusted. Proposed class-level role assignments.",
-      createdAt: new Date(),
-      tokens: 320,
-    },
-    {
-      id: "n2",
-      title: "UI Layout Split",
-      summary:
-        "Plan to split layout into Sidebar, Chat, Graph, NodeSummary with resizable panels.",
-      createdAt: new Date(),
-      tokens: 210,
-    },
-  ];
-
-  const acceptedNodes = [
-    {
-      id: "n3",
-      title: "Assignment Model Schema",
-      summary:
-        "Assignment includes Title, Description, Settings, LessonID, UserID.",
-      createdAt: new Date(),
-      tokens: 150,
-    },
-  ];
-
-  // 🔹 Mock handlers
-  const handleSaveOne = (id: string) => {
-    console.log("Saved node:", id);
-  };
-  const handleRejectOne = (id: string) => {
-    console.log("Rejected node:", id);
-  };
-  const handleSaveMany = (ids: string[]) => {
-    console.log("Saved ALL:", ids);
-  };
-
   return (
     <div className="h-screen bg-gray-100">
-      <ResizablePanelGroup direction="horizontal" className="h-full">
-        {/* Sidebar */}
+      <ResizablePanelGroup
+        direction="horizontal"
+        className="h-full min-h-0 overflow-hidden"
+      >
         <ResizablePanel
           defaultSize={22}
           minSize={16}
           maxSize={30}
-          className="border-r bg-white"
+          className="border-r bg-white min-h-0 overflow-hidden"
         >
-          <div className="flex h-full flex-col">
+          <div className="flex h-full min-h-0 flex-col">
             <div className="p-4 border-b flex justify-between items-center">
               <h1 className="text-xl font-semibold text-gray-900">
                 AI Chat Organizer
               </h1>
               <SignOutButton />
             </div>
-            <div className="flex-1 overflow-auto">
+            <div className="flex-1 min-h-0 overflow-auto">
               <Sidebar
                 selectedProjectId={selectedProjectId}
                 selectedChatId={selectedChatId}
@@ -121,11 +81,12 @@ export function ChatApp() {
             </div>
           </div>
         </ResizablePanel>
-
         <ResizableHandle withHandle />
-
-        {/* Main Chat */}
-        <ResizablePanel defaultSize={52} minSize={35} className="bg-gray-50">
+        <ResizablePanel
+          defaultSize={52}
+          minSize={35}
+          className="bg-gray-50 min-h-0 overflow-hidden"
+        >
           <div className="h-full">
             {selectedChatId ? (
               <ChatInterface chatId={selectedChatId} />
@@ -134,40 +95,125 @@ export function ChatApp() {
             )}
           </div>
         </ResizablePanel>
-
         <ResizableHandle withHandle />
-
-        {/* Graph + Node Summary */}
         <ResizablePanel
           defaultSize={26}
           minSize={20}
-          className="border-l bg-gray-50"
+          className="border-l bg-gray-50 min-h-0 overflow-hidden"
         >
-          <ResizablePanelGroup direction="vertical" className="h-full">
+          <ResizablePanelGroup
+            direction="vertical"
+            className="h-full min-h-0 overflow-hidden"
+          >
             <ResizablePanel
               defaultSize={60}
               minSize={30}
-              className="border-b bg-gray-50"
+              className="border-b bg-gray-50 min-h-0 overflow-hidden"
             >
-              <GraphPanel />
+              <div className="h-full overflow-hidden">
+                <GraphPanel />
+              </div>
             </ResizablePanel>
             <ResizableHandle withHandle />
             <ResizablePanel
               defaultSize={40}
               minSize={25}
-              className="bg-gray-50"
+              className="bg-gray-50 min-h-0 overflow-hidden"
             >
-              <NodeSummaryPanel
-                proposedNodes={proposedNodes}
-                acceptedNodes={acceptedNodes}
-                onSaveOne={handleSaveOne}
-                onRejectOne={handleRejectOne}
-                onSaveMany={handleSaveMany}
-              />
+              <div className="h-full overflow-hidden">
+                {selectedProjectId ? (
+                  <NotesSection projectId={selectedProjectId} />
+                ) : (
+                  <NodeSummaryPanel
+                    proposedNodes={[]}
+                    acceptedNodes={[]}
+                    onSaveOne={async () => {}}
+                    onRejectOne={async () => {}}
+                    onSaveMany={async () => {}}
+                  />
+                )}
+              </div>
             </ResizablePanel>
           </ResizablePanelGroup>
         </ResizablePanel>
       </ResizablePanelGroup>
     </div>
+  );
+}
+
+function NotesSection({ projectId }: { projectId: Id<"projects"> }) {
+  const { pending, accepted } = useNotesByStatus(projectId);
+  const reviewNotes = useAction(api.notes.review);
+
+  const pendingIdMap = useMemo(
+    () =>
+      new Map<string, Id<"notes">>(pending.map((n) => [String(n._id), n._id])),
+    [pending]
+  );
+
+  const proposedNodes = useMemo(
+    () =>
+      pending.map((n) => ({
+        id: String(n._id),
+        title: n.title,
+        summary: n.body,
+        createdAt: new Date(n._creationTime),
+        tokens: 0,
+      })),
+    [pending]
+  );
+
+  const acceptedNodes = useMemo(
+    () =>
+      accepted.map((n) => ({
+        id: String(n._id),
+        title: n.title,
+        summary: n.body,
+        createdAt: new Date(n._creationTime),
+        tokens: 0,
+      })),
+    [accepted]
+  );
+
+  const handleSaveOne = async (id: string) => {
+    const nid = pendingIdMap.get(id);
+    if (!nid) return;
+    await reviewNotes({
+      projectId,
+      approveIds: [nid],
+      rejectIds: [],
+    });
+  };
+
+  const handleRejectOne = async (id: string) => {
+    const nid = pendingIdMap.get(id);
+    if (!nid) return;
+    await reviewNotes({
+      projectId,
+      approveIds: [],
+      rejectIds: [nid],
+    });
+  };
+
+  const handleSaveMany = async (ids: string[]) => {
+    const nids = ids
+      .map((id) => pendingIdMap.get(id))
+      .filter((x): x is Id<"notes"> => !!x);
+    if (nids.length === 0) return;
+    await reviewNotes({
+      projectId,
+      approveIds: nids,
+      rejectIds: [],
+    });
+  };
+
+  return (
+    <NodeSummaryPanel
+      proposedNodes={proposedNodes}
+      acceptedNodes={acceptedNodes}
+      onSaveOne={handleSaveOne}
+      onRejectOne={handleRejectOne}
+      onSaveMany={handleSaveMany}
+    />
   );
 }

@@ -67,7 +67,7 @@ export function NodeCard({
               if (onSave) void onSave(node.id);
             }}
           >
-            Save
+            Accept
           </Button>
           <Button
             size="sm"
