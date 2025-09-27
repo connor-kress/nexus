@@ -14,7 +14,6 @@ const tagValidator = v.object({
   _id: v.id("tags"),
   _creationTime: v.number(),
   projectId: v.id("projects"),
-  noteId: v.id("notes"),
   name: v.string(),
 });
 
@@ -46,13 +45,21 @@ export const create = mutation({
 
     if (args.tagNames && args.tagNames.length > 0) {
       for (const name of args.tagNames) {
-        const existing = await ctx.db
+        // Find or create tag in project catalog
+        const tag = await ctx.db
           .query("tags")
-          .withIndex("by_note_and_name", (q) => q.eq("noteId", noteId).eq("name", name))
+          .withIndex("by_project_and_name", (q) => q.eq("projectId", args.projectId).eq("name", name))
           .unique()
           .catch(() => null);
-        if (!existing) {
-          await ctx.db.insert("tags", { noteId, projectId: args.projectId, name });
+        const tagId = tag?._id ?? (await ctx.db.insert("tags", { projectId: args.projectId, name }));
+        // Add relation if missing
+        const rel = await ctx.db
+          .query("notesTags")
+          .withIndex("by_note_and_tag", (q) => q.eq("noteId", noteId).eq("tagId", tagId))
+          .unique()
+          .catch(() => null);
+        if (!rel) {
+          await ctx.db.insert("notesTags", { noteId, tagId });
         }
       }
     }
@@ -78,13 +85,20 @@ export const addTag = mutation({
       .catch(() => null);
     if (!membership) throw new Error("Forbidden");
 
-    const existing = await ctx.db
+    const tag = await ctx.db
       .query("tags")
-      .withIndex("by_note_and_name", (q) => q.eq("noteId", args.noteId).eq("name", args.name))
+      .withIndex("by_project_and_name", (q) => q.eq("projectId", note.projectId).eq("name", args.name))
       .unique()
       .catch(() => null);
-    if (!existing) {
-      await ctx.db.insert("tags", { noteId: args.noteId, projectId: note.projectId, name: args.name });
+    const tagId = tag?._id ?? (await ctx.db.insert("tags", { projectId: note.projectId, name: args.name }));
+
+    const rel = await ctx.db
+      .query("notesTags")
+      .withIndex("by_note_and_tag", (q) => q.eq("noteId", args.noteId).eq("tagId", tagId))
+      .unique()
+      .catch(() => null);
+    if (!rel) {
+      await ctx.db.insert("notesTags", { noteId: args.noteId, tagId });
     }
     return null;
   },
@@ -109,11 +123,18 @@ export const removeTag = mutation({
 
     const tag = await ctx.db
       .query("tags")
-      .withIndex("by_note_and_name", (q) => q.eq("noteId", args.noteId).eq("name", args.name))
+      .withIndex("by_project_and_name", (q) => q.eq("projectId", note.projectId).eq("name", args.name))
       .unique()
       .catch(() => null);
     if (tag) {
-      await ctx.db.delete(tag._id);
+      const rel = await ctx.db
+        .query("notesTags")
+        .withIndex("by_note_and_tag", (q) => q.eq("noteId", args.noteId).eq("tagId", tag._id))
+        .unique()
+        .catch(() => null);
+      if (rel) {
+        await ctx.db.delete(rel._id);
+      }
     }
     return null;
   },
@@ -168,10 +189,15 @@ export const listWithTags = query({
 
     const results: Array<{ note: any; tags: any[] }> = [];
     for (const note of notes) {
-      const tags = await ctx.db
-        .query("tags")
+      const relations = await ctx.db
+        .query("notesTags")
         .withIndex("by_note", (q) => q.eq("noteId", note._id))
         .collect();
+      const tags: any[] = [];
+      for (const rel of relations) {
+        const tag = await ctx.db.get(rel.tagId);
+        if (tag) tags.push(tag);
+      }
       results.push({ note, tags });
     }
     return results;
@@ -198,10 +224,15 @@ export const getWithTags = query({
       .catch(() => null);
     if (!membership) throw new Error("Forbidden");
 
-    const tags = await ctx.db
-      .query("tags")
+    const relations = await ctx.db
+      .query("notesTags")
       .withIndex("by_note", (q) => q.eq("noteId", note._id))
       .collect();
+    const tags: any[] = [];
+    for (const rel of relations) {
+      const tag = await ctx.db.get(rel.tagId);
+      if (tag) tags.push(tag);
+    }
 
     return { note, tags };
   },
