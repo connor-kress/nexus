@@ -42,15 +42,28 @@ const applicationTables = {
   projectUsers: defineTable({
     projectId: v.id("projects"),
     userId: v.id("users"),
-    role: v.optional(v.union(
+    role: v.union(
       v.literal("owner"),
-      v.literal("editor"),
-      v.literal("viewer"),
-    )),
+      v.literal("member"),
+    ),
   })
     .index("by_user", ["userId"]) 
     .index("by_project", ["projectId"]) 
     .index("by_user_and_project", ["userId", "projectId"]),
+
+  // Project invitations referencing users via foreign key
+  invitations: defineTable({
+    projectId: v.id("projects"),
+    userId: v.id("users"),
+    invitedBy: v.id("users"),
+    status: v.optional(v.union(
+      v.literal("pending"),
+      v.literal("accepted"),
+      v.literal("revoked"),
+    )),
+  })
+    .index("by_project_and_user", ["projectId", "userId"]) 
+    .index("by_user", ["userId"]),
 };
 
 export default defineSchema({

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
@@ -18,13 +19,97 @@ export function Sidebar({ selectedProjectId, selectedChatId, onProjectSelect, on
   const [showNewChat, setShowNewChat] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
   const [newChatName, setNewChatName] = useState("");
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [showInvite, setShowInvite] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
 
   const projects = useQuery(api.projects.list);
   const chats = useQuery(api.chats.listByProject, selectedProjectId ? { projectId: selectedProjectId } : "skip");
   const selectedProject = useQuery(api.projects.get, selectedProjectId ? { id: selectedProjectId } : "skip");
+  const myRole = useQuery(api.projects.membershipRole, selectedProjectId ? { id: selectedProjectId } : "skip");
+  const invitations = useQuery(api.projects.listInvitations, selectedProjectId ? { projectId: selectedProjectId } : "skip");
+  const myInvites = useQuery(api.projects.myInvitations);
 
   const createProject = useMutation(api.projects.create);
   const createChat = useMutation(api.chats.create);
+  const inviteByEmail = useMutation(api.projects.inviteByEmail);
+  const acceptInvitation = useMutation(api.projects.acceptInvitation);
+  const rejectInvitation = useMutation(api.projects.rejectInvitation);
+
+  const pendingInvites = (myInvites?.filter((i) => (i.status ?? "pending") === "pending") ?? []);
+
+  const notificationsOverlay = showNotifications
+    ? createPortal(
+        <div className="fixed inset-0 z-50">
+          <div className="absolute inset-0 bg-black/20" onClick={() => setShowNotifications(false)} />
+          <div className="absolute left-4 bottom-4 w-80 bg-white border border-gray-200 rounded-lg shadow-lg">
+            <div className="p-3 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <div className="text-sm font-medium text-gray-800">Notifications</div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowNotifications(false)}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  Close
+                </Button>
+              </div>
+            </div>
+            <div className="p-3 max-h-96 overflow-y-auto">
+              <div className="text-xs font-medium text-gray-600 mb-2">Pending invitations</div>
+              {pendingInvites.length > 0 ? (
+                <div className="space-y-2">
+                  {pendingInvites.map((inv) => (
+                    <div key={inv._id} className="text-sm text-gray-700">
+                      <div className="flex items-center justify-between">
+                        <div className="mr-2 truncate">
+                          <span className="font-medium">{inv.projectName}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            size="sm"
+                            onClick={async () => {
+                              try {
+                                await acceptInvitation({ invitationId: inv._id });
+                                toast.success("Invitation accepted");
+                              } catch (e) {
+                                const message = (e as any)?.data?.error ?? (e as Error).message ?? "Failed to accept";
+                                toast.error(message);
+                              }
+                            }}
+                          >
+                            Accept
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={async () => {
+                              try {
+                                await rejectInvitation({ invitationId: inv._id });
+                                toast.success("Invitation declined");
+                              } catch (e) {
+                                const message = (e as any)?.data?.error ?? (e as Error).message ?? "Failed to decline";
+                                toast.error(message);
+                              }
+                            }}
+                          >
+                            Reject
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-xs text-gray-500">No notifications</div>
+              )}
+            </div>
+          </div>
+        </div>,
+        document.body
+      )
+    : null;
 
   const handleCreateProject = async () => {
     if (!newProjectName.trim()) return;
@@ -57,6 +142,29 @@ export function Sidebar({ selectedProjectId, selectedChatId, onProjectSelect, on
     }
   };
 
+  const handleInvite = async () => {
+    if (!selectedProjectId) return;
+    const email = inviteEmail.trim();
+    if (!email) {
+      toast.error("Please enter an email address.");
+      return;
+    }
+    const emailPattern = /^(?:[a-zA-Z0-9_'^&\-]+(?:\.[a-zA-Z0-9_'^&\-]+)*|".+")@(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$/;
+    if (!emailPattern.test(email)) {
+      toast.error("Please enter a valid email address.");
+      return;
+    }
+    try {
+      await inviteByEmail({ projectId: selectedProjectId, email });
+      setInviteEmail("");
+      setShowInvite(false);
+      toast.success("Invitation sent");
+    } catch (error) {
+      const message = (error as any)?.data?.error ?? (error as Error).message ?? "Failed to send invitation";
+      toast.error(message);
+    }
+  };
+
   const handleBackToProjects = () => {
     onProjectSelect(null);
     onChatSelect(null);
@@ -65,7 +173,8 @@ export function Sidebar({ selectedProjectId, selectedChatId, onProjectSelect, on
   if (selectedProjectId) {
     // Show chats in selected project
     return (
-      <div className="flex-1 flex flex-col">
+      <>
+      <div className="h-full flex flex-col">
         <div className="p-4 border-b border-gray-200">
           <Button
             variant="ghost"
@@ -77,7 +186,49 @@ export function Sidebar({ selectedProjectId, selectedChatId, onProjectSelect, on
             </svg>
             Back to Projects
           </Button>
-          <h2 className="font-semibold text-gray-900 truncate">{selectedProject?.name}</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold text-gray-900 truncate">{selectedProject?.name}</h2>
+            {myRole === "owner" && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowInvite((v) => !v)}
+                className="text-blue-600 hover:text-blue-700"
+              >
+                Invite
+              </Button>
+            )}
+          </div>
+          {showInvite && myRole === "owner" && (
+            <div className="mt-3 p-3 bg-gray-50 rounded-lg">
+              <div className="text-sm font-medium text-gray-700 mb-2">Invite member by email</div>
+              <Input
+                type="email"
+                placeholder="email@example.com"
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+                className="mb-2"
+                onKeyDown={(e) => e.key === "Enter" && handleInvite()}
+              />
+              <div className="flex gap-2 items-center">
+                <Button size="sm" onClick={handleInvite}>Send</Button>
+                <Button size="sm" variant="ghost" onClick={() => setShowInvite(false)}>Cancel</Button>
+              </div>
+              {invitations && invitations.length > 0 && (
+                <div className="mt-3">
+                  <div className="text-xs text-gray-500 mb-1">Invitations</div>
+                  <div className="space-y-1">
+                    {invitations.map((inv) => (
+                      <div key={inv._id} className="text-xs text-gray-600 flex items-center justify-between">
+                        <span>{inv.userEmail}</span>
+                        <span className="uppercase tracking-wide text-[10px] text-gray-400">{inv.status ?? "pending"}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="flex-1 overflow-y-auto p-4">
@@ -128,13 +279,34 @@ export function Sidebar({ selectedProjectId, selectedChatId, onProjectSelect, on
             ))}
           </div>
         </div>
+        {/* Bottom bar with notifications */}
+        <div className="p-3 border-t border-gray-200">
+          <div className="flex items-center justify-between">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowNotifications((v) => !v)}
+              className="text-gray-600 hover:text-gray-900"
+            >
+              <span className="inline-flex items-center">
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                </svg>
+                Notifications
+              </span>
+            </Button>
+          </div>
+        </div>
       </div>
+      {notificationsOverlay}
+      </>
     );
   }
 
   // Show projects list
   return (
-    <div className="flex-1 flex flex-col">
+    <>
+    <div className="h-full flex flex-col">
       <div className="p-4 border-b border-gray-200">
         <div className="flex justify-between items-center">
           <h2 className="font-semibold text-gray-900">Projects</h2>
@@ -184,6 +356,26 @@ export function Sidebar({ selectedProjectId, selectedChatId, onProjectSelect, on
           ))}
         </div>
       </div>
+        {/* Bottom bar with notifications */}
+        <div className="p-3 border-t border-gray-200">
+          <div className="flex items-center justify-between">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowNotifications((v) => !v)}
+              className="text-gray-600 hover:text-gray-900"
+            >
+              <span className="inline-flex items-center">
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                </svg>
+                Notifications
+              </span>
+            </Button>
+          </div>
+        </div>
     </div>
+    {notificationsOverlay}
+    </>
   );
 }
