@@ -1,3 +1,4 @@
+// app/components/NodeSummary.tsx
 "use client";
 
 import * as React from "react";
@@ -45,14 +46,14 @@ export default function NodeSummaryPanel({
   };
 
   return (
-    <div className={cn("h-full w-full p-3", className)}>
+    <div className={cn("h-full w-full p-3 flex flex-col min-h-0", className)}>
       <div className="text-sm font-medium text-gray-600 mb-2">Node Summary</div>
 
-      <div className="h-[calc(100%-1.25rem-0.5rem)] rounded-xl border border-gray-200 bg-white shadow-sm flex flex-col">
+      <div className="flex-1 min-h-0 rounded-xl border border-gray-200 bg-white shadow-sm flex flex-col">
         <Tabs
           value={tab}
           onValueChange={(v) => setTab(v as "proposed" | "accepted")}
-          className="flex flex-1 flex-col"
+          className="flex-1 flex flex-col min-h-0"
         >
           <div className="border-b px-3 pt-3">
             <TabsList>
@@ -69,9 +70,9 @@ export default function NodeSummaryPanel({
 
           <TabsContent
             value="proposed"
-            className="flex flex-1 flex-col p-0 data-[state=inactive]:hidden"
+            className="flex-1 flex flex-col min-h-0 p-0 data-[state=inactive]:hidden"
           >
-            <ScrollArea className="flex-1 px-3 py-3">
+            <ScrollArea className="flex-1 h-0 px-3 py-3">
               {proposedNodes.length === 0 ? (
                 <p className="text-sm text-gray-500">No proposed nodes yet.</p>
               ) : (
@@ -96,7 +97,7 @@ export default function NodeSummaryPanel({
                   : "No proposed nodes"}
               </span>
               <Button
-                onClick={() => handleSaveAll}
+                onClick={handleSaveAll}
                 disabled={!proposedNodes?.length || savingAll}
               >
                 {savingAll ? "Saving…" : "Save all proposed nodes"}
@@ -106,9 +107,9 @@ export default function NodeSummaryPanel({
 
           <TabsContent
             value="accepted"
-            className="flex-1 p-0 data-[state=inactive]:hidden"
+            className="flex-1 flex flex-col min-h-0 p-0 data-[state=inactive]:hidden"
           >
-            <ScrollArea className="h-full px-3 py-3">
+            <ScrollArea className="flex-1 h-0 px-3 py-3">
               {acceptedNodes.length === 0 ? (
                 <p className="text-sm text-gray-500">No accepted nodes yet.</p>
               ) : (
