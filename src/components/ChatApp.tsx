@@ -50,6 +50,7 @@ export function ChatApp() {
   const [selectedChatId, setSelectedChatId] = useState<Id<"chats"> | null>(
     null
   );
+  const [selectedNoteId, setSelectedNoteId] = useState<Id<"notes"> | null>(null);
   const user = useQuery(api.auth.loggedInUser);
 
   //this is just mock data
@@ -149,7 +150,7 @@ export function ChatApp() {
               minSize={30}
               className="border-b bg-gray-50"
             >
-              <GraphPanel />
+              <GraphPanel projectId={selectedProjectId ?? undefined} onSelectNote={setSelectedNoteId} />
             </ResizablePanel>
             <ResizableHandle withHandle />
             <ResizablePanel
@@ -163,7 +164,10 @@ export function ChatApp() {
                 onSaveOne={handleSaveOne}
                 onRejectOne={handleRejectOne}
                 onSaveMany={handleSaveMany}
+                selectedNoteId={selectedNoteId ?? undefined}
+                onClear={() => setSelectedNoteId(null)}
               />
+              
             </ResizablePanel>
           </ResizablePanelGroup>
         </ResizablePanel>
