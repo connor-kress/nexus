@@ -11,11 +11,15 @@ export const list = query({
       return [];
     }
 
-    // Verify chat ownership
+    // Verify membership via chat's project
     const chat = await ctx.db.get(args.chatId);
-    if (!chat || chat.userId !== userId) {
-      return [];
-    }
+    if (!chat) return [];
+    const membership = await ctx.db
+      .query("projectUsers")
+      .withIndex("by_user_and_project", (q) => q.eq("userId", userId).eq("projectId", chat.projectId))
+      .unique()
+      .catch(() => null);
+    if (!membership) return [];
 
     return await ctx.db
       .query("messages")
@@ -37,11 +41,15 @@ export const add = mutation({
       throw new Error("Not authenticated");
     }
 
-    // Verify chat ownership
+    // Verify membership via chat's project
     const chat = await ctx.db.get(args.chatId);
-    if (!chat || chat.userId !== userId) {
-      throw new Error("Chat not found");
-    }
+    if (!chat) throw new Error("Chat not found");
+    const membership = await ctx.db
+      .query("projectUsers")
+      .withIndex("by_user_and_project", (q) => q.eq("userId", userId).eq("projectId", chat.projectId))
+      .unique()
+      .catch(() => null);
+    if (!membership) throw new Error("Chat not found");
 
     return await ctx.db.insert("messages", {
       chatId: args.chatId,

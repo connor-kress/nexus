@@ -13,11 +13,13 @@ export const create = mutation({
       throw new Error("Not authenticated");
     }
 
-    return await ctx.db.insert("projects", {
+    const projectId = await ctx.db.insert("projects", {
       name: args.name,
       description: args.description,
-      userId,
     });
+    // Automatically add creator as owner member
+    await ctx.db.insert("projectUsers", { projectId, userId, role: "owner" });
+    return projectId;
   },
 });
 
@@ -29,11 +31,20 @@ export const list = query({
       return [];
     }
 
-    return await ctx.db
-      .query("projects")
+    // Find projects the user is a member of
+    const memberships = await ctx.db
+      .query("projectUsers")
       .withIndex("by_user", (q) => q.eq("userId", userId))
-      .order("desc")
       .collect();
+
+    const projects = [] as Array<any>;
+    for (const m of memberships) {
+      const p = await ctx.db.get(m.projectId);
+      if (p) projects.push(p);
+    }
+    // Newest first by creation time
+    projects.sort((a, b) => b._creationTime - a._creationTime);
+    return projects;
   },
 });
 
@@ -46,9 +57,14 @@ export const get = query({
     }
 
     const project = await ctx.db.get(args.id);
-    if (!project || project.userId !== userId) {
-      throw new Error("Project not found");
-    }
+    if (!project) throw new Error("Project not found");
+
+    const membership = await ctx.db
+      .query("projectUsers")
+      .withIndex("by_user_and_project", (q) => q.eq("userId", userId).eq("projectId", args.id))
+      .unique()
+      .catch(() => null);
+    if (!membership) throw new Error("Project not found");
 
     return project;
   },

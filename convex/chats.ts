@@ -13,16 +13,19 @@ export const create = mutation({
       throw new Error("Not authenticated");
     }
 
-    // Verify project ownership
-    const project = await ctx.db.get(args.projectId);
-    if (!project || project.userId !== userId) {
+    // Verify membership in project
+    const membership = await ctx.db
+      .query("projectUsers")
+      .withIndex("by_user_and_project", (q) => q.eq("userId", userId).eq("projectId", args.projectId))
+      .unique()
+      .catch(() => null);
+    if (!membership) {
       throw new Error("Project not found");
     }
 
     return await ctx.db.insert("chats", {
       name: args.name,
       projectId: args.projectId,
-      userId,
     });
   },
 });
@@ -35,11 +38,13 @@ export const listByProject = query({
       return [];
     }
 
-    // Verify project ownership
-    const project = await ctx.db.get(args.projectId);
-    if (!project || project.userId !== userId) {
-      return [];
-    }
+    // Verify membership
+    const membership = await ctx.db
+      .query("projectUsers")
+      .withIndex("by_user_and_project", (q) => q.eq("userId", userId).eq("projectId", args.projectId))
+      .unique()
+      .catch(() => null);
+    if (!membership) return [];
 
     return await ctx.db
       .query("chats")
@@ -58,9 +63,14 @@ export const get = query({
     }
 
     const chat = await ctx.db.get(args.id);
-    if (!chat || chat.userId !== userId) {
-      throw new Error("Chat not found");
-    }
+    if (!chat) throw new Error("Chat not found");
+
+    const membership = await ctx.db
+      .query("projectUsers")
+      .withIndex("by_user_and_project", (q) => q.eq("userId", userId).eq("projectId", chat.projectId))
+      .unique()
+      .catch(() => null);
+    if (!membership) throw new Error("Chat not found");
 
     return chat;
   },

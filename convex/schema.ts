@@ -5,15 +5,13 @@ import { authTables } from "@convex-dev/auth/server";
 const applicationTables = {
   projects: defineTable({
     name: v.string(),
-    userId: v.id("users"),
     description: v.optional(v.string()),
-  }).index("by_user", ["userId"]),
+  }),
 
   chats: defineTable({
     name: v.string(),
     projectId: v.id("projects"),
-    userId: v.id("users"),
-  }).index("by_project", ["projectId"]).index("by_user", ["userId"]),
+  }).index("by_project", ["projectId"]),
 
   messages: defineTable({
     chatId: v.id("chats"),
@@ -21,6 +19,38 @@ const applicationTables = {
     role: v.union(v.literal("user"), v.literal("assistant")),
     userId: v.id("users"),
   }).index("by_chat", ["chatId"]),
+
+  // Notes (project-scoped, user-owned)
+  notes: defineTable({
+    projectId: v.id("projects"),
+    title: v.string(),
+    body: v.string(),
+  }).index("by_project", ["projectId"]),
+
+  // Tags: simple denormalized per note
+  tags: defineTable({
+    noteId: v.id("notes"),
+    projectId: v.id("projects"),
+    name: v.string(),
+  })
+    .index("by_note", ["noteId"]) 
+    .index("by_name", ["name"]) 
+    .index("by_note_and_name", ["noteId", "name"]) 
+    .index("by_project_and_name", ["projectId", "name"]),
+
+  // Memberships: many users per project
+  projectUsers: defineTable({
+    projectId: v.id("projects"),
+    userId: v.id("users"),
+    role: v.optional(v.union(
+      v.literal("owner"),
+      v.literal("editor"),
+      v.literal("viewer"),
+    )),
+  })
+    .index("by_user", ["userId"]) 
+    .index("by_project", ["projectId"]) 
+    .index("by_user_and_project", ["userId", "projectId"]),
 };
 
 export default defineSchema({
