@@ -1,3 +1,4 @@
+// app/components/NodeSummary.tsx
 "use client";
 
 import * as React from "react";
@@ -73,27 +74,62 @@ export default function NodeSummaryPanel({
   };
 
   return (
-    <div className={cn("h-full w-full p-3", className)}>
+    <div className={cn("h-full w-full p-3 flex flex-col min-h-0", className)}>
       <div className="text-sm font-medium text-gray-600 mb-2">Node Summary</div>
 
-      <div className="h-[calc(100%-1.25rem-0.5rem)] rounded-xl border border-gray-200 bg-white shadow-sm flex flex-col">
-        {!note ? (
-          <Tabs
-            value={tab}
-            onValueChange={(v: string) => setTab(v as "proposed" | "accepted")}
-            className="flex flex-1 flex-col"
+      <div className="flex-1 min-h-0 rounded-xl border border-gray-200 bg-white shadow-sm flex flex-col">
+        <Tabs
+          value={tab}
+          onValueChange={(v) => setTab(v as "proposed" | "accepted")}
+          className="flex-1 flex flex-col min-h-0"
+        >
+          <div className="border-b px-3 pt-3">
+            <TabsList>
+              <TabsTrigger value="proposed">
+                Proposed
+                <Badge className="ml-2">{proposedNodes?.length}</Badge>
+              </TabsTrigger>
+              <TabsTrigger value="accepted">
+                Accepted
+                <Badge className="ml-2">{acceptedNodes?.length}</Badge>
+              </TabsTrigger>
+            </TabsList>
+          </div>
+
+          <TabsContent
+            value="proposed"
+            className="flex-1 flex flex-col min-h-0 p-0 data-[state=inactive]:hidden"
           >
-            <div className="border-b px-3 pt-3">
-              <TabsList>
-                <TabsTrigger value="proposed">
-                  Proposed
-                  <Badge className="ml-2">{proposedNodes?.length ?? 0}</Badge>
-                </TabsTrigger>
-                <TabsTrigger value="accepted">
-                  Accepted
-                  <Badge className="ml-2">{acceptedNodes?.length ?? 0}</Badge>
-                </TabsTrigger>
-              </TabsList>
+            <ScrollArea className="flex-1 h-0 px-3 py-3">
+              {proposedNodes.length === 0 ? (
+                <p className="text-sm text-gray-500">No proposed nodes yet.</p>
+              ) : (
+                <div className="space-y-3">
+                  {proposedNodes.map((n) => (
+                    <NodeCard
+                      key={n.id}
+                      node={n}
+                      variant="proposed"
+                      onSave={onSaveOne}
+                      onReject={onRejectOne}
+                    />
+                  ))}
+                </div>
+              )}
+            </ScrollArea>
+
+            <div className="border-t bg-white px-3 py-3 flex items-center justify-between">
+              <span className="text-xs text-gray-500">
+                {proposedNodes?.length
+                  ? `${proposedNodes?.length} proposed node${proposedNodes?.length > 1 ? "s" : ""}`
+                  : "No proposed nodes"}
+              </span>
+              <Button
+                onClick={handleSaveAll}
+                disabled={!proposedNodes?.length || savingAll}
+              >
+                {savingAll ? "Saving…" : "Save all proposed nodes"}
+              </Button>
             </div>
 
             <TabsContent

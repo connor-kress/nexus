@@ -1,6 +1,7 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, query, action } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
+import { api } from "./_generated/api";
 
 const noteValidator = v.object({
   _id: v.id("notes"),
@@ -9,11 +10,7 @@ const noteValidator = v.object({
   title: v.string(),
   body: v.string(),
   status: v.optional(
-    v.union(
-      v.literal("pending"),
-      v.literal("accepted"),
-      v.literal("rejected"),
-    ),
+    v.union(v.literal("pending"), v.literal("accepted"), v.literal("rejected"))
   ),
 });
 
@@ -34,43 +31,45 @@ export const create = mutation({
       v.union(
         v.literal("pending"),
         v.literal("accepted"),
-        v.literal("rejected"),
-      ),
+        v.literal("rejected")
+      )
     ),
   },
   returns: v.id("notes"),
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("Not authenticated");
-
-    // Require membership in project
     const membership = await ctx.db
       .query("projectUsers")
-      .withIndex("by_user_and_project", (q) => q.eq("userId", userId).eq("projectId", args.projectId))
+      .withIndex("by_user_and_project", (q) =>
+        q.eq("userId", userId).eq("projectId", args.projectId)
+      )
       .unique()
       .catch(() => null);
     if (!membership) throw new Error("Project not found");
-
     const noteId = await ctx.db.insert("notes", {
       projectId: args.projectId,
       title: args.title,
       body: args.body,
       status: args.status ?? "pending",
     });
-
     if (args.tagNames && args.tagNames.length > 0) {
       for (const name of args.tagNames) {
-        // Find or create tag in project catalog
         const tag = await ctx.db
           .query("tags")
-          .withIndex("by_project_and_name", (q) => q.eq("projectId", args.projectId).eq("name", name))
+          .withIndex("by_project_and_name", (q) =>
+            q.eq("projectId", args.projectId).eq("name", name)
+          )
           .unique()
           .catch(() => null);
-        const tagId = tag?._id ?? (await ctx.db.insert("tags", { projectId: args.projectId, name }));
-        // Add relation if missing
+        const tagId =
+          tag?._id ??
+          (await ctx.db.insert("tags", { projectId: args.projectId, name }));
         const rel = await ctx.db
           .query("notesTags")
-          .withIndex("by_note_and_tag", (q) => q.eq("noteId", noteId).eq("tagId", tagId))
+          .withIndex("by_note_and_tag", (q) =>
+            q.eq("noteId", noteId).eq("tagId", tagId)
+          )
           .unique()
           .catch(() => null);
         if (!rel) {
@@ -78,7 +77,6 @@ export const create = mutation({
         }
       }
     }
-
     return noteId;
   },
 });
@@ -89,27 +87,34 @@ export const addTag = mutation({
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("Not authenticated");
-
     const note = await ctx.db.get(args.noteId);
     if (!note) throw new Error("Note not found");
-
     const membership = await ctx.db
       .query("projectUsers")
-      .withIndex("by_user_and_project", (q) => q.eq("userId", userId).eq("projectId", note.projectId))
+      .withIndex("by_user_and_project", (q) =>
+        q.eq("userId", userId).eq("projectId", note.projectId)
+      )
       .unique()
       .catch(() => null);
     if (!membership) throw new Error("Forbidden");
-
     const tag = await ctx.db
       .query("tags")
-      .withIndex("by_project_and_name", (q) => q.eq("projectId", note.projectId).eq("name", args.name))
+      .withIndex("by_project_and_name", (q) =>
+        q.eq("projectId", note.projectId).eq("name", args.name)
+      )
       .unique()
       .catch(() => null);
-    const tagId = tag?._id ?? (await ctx.db.insert("tags", { projectId: note.projectId, name: args.name }));
-
+    const tagId =
+      tag?._id ??
+      (await ctx.db.insert("tags", {
+        projectId: note.projectId,
+        name: args.name,
+      }));
     const rel = await ctx.db
       .query("notesTags")
-      .withIndex("by_note_and_tag", (q) => q.eq("noteId", args.noteId).eq("tagId", tagId))
+      .withIndex("by_note_and_tag", (q) =>
+        q.eq("noteId", args.noteId).eq("tagId", tagId)
+      )
       .unique()
       .catch(() => null);
     if (!rel) {
@@ -125,26 +130,29 @@ export const removeTag = mutation({
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("Not authenticated");
-
     const note = await ctx.db.get(args.noteId);
     if (!note) throw new Error("Note not found");
-
     const membership = await ctx.db
       .query("projectUsers")
-      .withIndex("by_user_and_project", (q) => q.eq("userId", userId).eq("projectId", note.projectId))
+      .withIndex("by_user_and_project", (q) =>
+        q.eq("userId", userId).eq("projectId", note.projectId)
+      )
       .unique()
       .catch(() => null);
     if (!membership) throw new Error("Forbidden");
-
     const tag = await ctx.db
       .query("tags")
-      .withIndex("by_project_and_name", (q) => q.eq("projectId", note.projectId).eq("name", args.name))
+      .withIndex("by_project_and_name", (q) =>
+        q.eq("projectId", note.projectId).eq("name", args.name)
+      )
       .unique()
       .catch(() => null);
     if (tag) {
       const rel = await ctx.db
         .query("notesTags")
-        .withIndex("by_note_and_tag", (q) => q.eq("noteId", args.noteId).eq("tagId", tag._id))
+        .withIndex("by_note_and_tag", (q) =>
+          q.eq("noteId", args.noteId).eq("tagId", tag._id)
+        )
         .unique()
         .catch(() => null);
       if (rel) {
@@ -161,19 +169,45 @@ export const listByProject = query({
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) return [];
-
     const membership = await ctx.db
       .query("projectUsers")
-      .withIndex("by_user_and_project", (q) => q.eq("userId", userId).eq("projectId", args.projectId))
+      .withIndex("by_user_and_project", (q) =>
+        q.eq("userId", userId).eq("projectId", args.projectId)
+      )
       .unique()
       .catch(() => null);
     if (!membership) return [];
-
     return await ctx.db
       .query("notes")
       .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
       .order("desc")
       .collect();
+  },
+});
+
+export const listByProjectAndStatus = query({
+  args: {
+    projectId: v.id("projects"),
+    status: v.union(v.literal("pending"), v.literal("accepted")),
+  },
+  returns: v.array(noteValidator),
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
+    const membership = await ctx.db
+      .query("projectUsers")
+      .withIndex("by_user_and_project", (q) =>
+        q.eq("userId", userId).eq("projectId", args.projectId)
+      )
+      .unique()
+      .catch(() => null);
+    if (!membership) return [];
+    const notes = await ctx.db
+      .query("notes")
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+      .order("desc")
+      .collect();
+    return notes.filter((n) => (n.status ?? "pending") === args.status);
   },
 });
 
@@ -188,22 +222,68 @@ export const listWithTags = query({
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) return [];
-
     const membership = await ctx.db
       .query("projectUsers")
-      .withIndex("by_user_and_project", (q) => q.eq("userId", userId).eq("projectId", args.projectId))
+      .withIndex("by_user_and_project", (q) =>
+        q.eq("userId", userId).eq("projectId", args.projectId)
+      )
       .unique()
       .catch(() => null);
     if (!membership) return [];
-
     const notes = await ctx.db
       .query("notes")
       .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
       .order("desc")
       .collect();
-
     const results: Array<{ note: any; tags: any[] }> = [];
     for (const note of notes) {
+      const relations = await ctx.db
+        .query("notesTags")
+        .withIndex("by_note", (q) => q.eq("noteId", note._id))
+        .collect();
+      const tags: any[] = [];
+      for (const rel of relations) {
+        const tag = await ctx.db.get(rel.tagId);
+        if (tag) tags.push(tag);
+      }
+      results.push({ note, tags });
+    }
+    return results;
+  },
+});
+
+export const listWithTagsByStatus = query({
+  args: {
+    projectId: v.id("projects"),
+    status: v.union(v.literal("pending"), v.literal("accepted")),
+  },
+  returns: v.array(
+    v.object({
+      note: noteValidator,
+      tags: v.array(tagValidator),
+    })
+  ),
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
+    const membership = await ctx.db
+      .query("projectUsers")
+      .withIndex("by_user_and_project", (q) =>
+        q.eq("userId", userId).eq("projectId", args.projectId)
+      )
+      .unique()
+      .catch(() => null);
+    if (!membership) return [];
+    const notes = await ctx.db
+      .query("notes")
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+      .order("desc")
+      .collect();
+    const filtered = notes.filter(
+      (n) => (n.status ?? "pending") === args.status
+    );
+    const results: Array<{ note: any; tags: any[] }> = [];
+    for (const note of filtered) {
       const relations = await ctx.db
         .query("notesTags")
         .withIndex("by_note", (q) => q.eq("noteId", note._id))
@@ -228,17 +308,16 @@ export const getWithTags = query({
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("Not authenticated");
-
     const note = await ctx.db.get(args.id);
     if (!note) throw new Error("Note not found");
-
     const membership = await ctx.db
       .query("projectUsers")
-      .withIndex("by_user_and_project", (q) => q.eq("userId", userId).eq("projectId", note.projectId))
+      .withIndex("by_user_and_project", (q) =>
+        q.eq("userId", userId).eq("projectId", note.projectId)
+      )
       .unique()
       .catch(() => null);
     if (!membership) throw new Error("Forbidden");
-
     const relations = await ctx.db
       .query("notesTags")
       .withIndex("by_note", (q) => q.eq("noteId", note._id))
@@ -248,13 +327,22 @@ export const getWithTags = query({
       const tag = await ctx.db.get(rel.tagId);
       if (tag) tags.push(tag);
     }
-
     return { note, tags };
   },
 });
 
 export const updateBody = mutation({
   args: { id: v.id("notes"), body: v.string() },
+
+export const setStatus = mutation({
+  args: {
+    noteId: v.id("notes"),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("accepted"),
+      v.literal("rejected")
+    ),
+  },
   returns: v.null(),
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
@@ -271,6 +359,7 @@ export const updateBody = mutation({
     if (!membership) throw new Error("Forbidden");
 
     await ctx.db.patch(args.id, { body: args.body });
+
     return null;
   },
 });
@@ -294,7 +383,6 @@ export const graphForProject = query({
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) return { nodes: [], edges: [] };
-
     const membership = await ctx.db
       .query("projectUsers")
       .withIndex("by_user_and_project", (q) =>
@@ -365,4 +453,32 @@ export const graphForProject = query({
   },
 });
 
-
+export const review = action({
+  args: {
+    projectId: v.id("projects"),
+    approveIds: v.array(v.id("notes")),
+    rejectIds: v.array(v.id("notes")),
+  },
+  handler: async (ctx, args) => {
+    const ok = await ctx.runQuery(api.notes.isMember, {
+      projectId: args.projectId,
+    });
+    if (!ok) throw new Error("Forbidden");
+    for (const id of args.approveIds) {
+      await ctx.runMutation(api.notes.setStatus, {
+        noteId: id,
+        status: "accepted",
+      });
+    }
+    for (const id of args.rejectIds) {
+      await ctx.runMutation(api.notes.setStatus, {
+        noteId: id,
+        status: "rejected",
+      });
+    }
+    return {
+      approved: args.approveIds.length,
+      rejected: args.rejectIds.length,
+    };
+  },
+});
