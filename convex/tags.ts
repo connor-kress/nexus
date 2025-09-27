@@ -19,14 +19,26 @@ export const add = mutation({
       .catch(() => null);
     if (!membership) throw new Error("Forbidden");
 
-    const existing = await ctx.db
+    // Find or create the tag in the project's tag catalog
+    const tag = await ctx.db
       .query("tags")
-      .withIndex("by_note_and_name", (q) => q.eq("noteId", args.noteId).eq("name", args.name))
+      .withIndex("by_project_and_name", (q) => q.eq("projectId", note.projectId).eq("name", args.name))
       .unique()
       .catch(() => null);
-    if (existing) return existing._id;
 
-    return await ctx.db.insert("tags", { noteId: args.noteId, projectId: note.projectId, name: args.name });
+    const tagId = tag?._id ?? (await ctx.db.insert("tags", { projectId: note.projectId, name: args.name }));
+
+    // Ensure relation exists between note and tag
+    const existingRel = await ctx.db
+      .query("notesTags")
+      .withIndex("by_note_and_tag", (q) => q.eq("noteId", args.noteId).eq("tagId", tagId))
+      .unique()
+      .catch(() => null);
+    if (!existingRel) {
+      await ctx.db.insert("notesTags", { noteId: args.noteId, tagId });
+    }
+
+    return tagId;
   },
 });
 
@@ -36,7 +48,6 @@ export const list = query({
     v.object({
       _id: v.id("tags"),
       _creationTime: v.number(),
-      noteId: v.id("notes"),
       name: v.string(),
     })
   ),
@@ -54,11 +65,19 @@ export const list = query({
       .catch(() => null);
     if (!membership) return [];
 
-    return await ctx.db
-      .query("tags")
+    const relations = await ctx.db
+      .query("notesTags")
       .withIndex("by_note", (q) => q.eq("noteId", args.noteId))
-      .order("asc")
       .collect();
+
+    const results: Array<{ _id: any; _creationTime: number; name: string }> = [];
+    for (const rel of relations) {
+      const tag = await ctx.db.get(rel.tagId);
+      if (tag) results.push(tag);
+    }
+    // Sort alphabetically by name for stability
+    results.sort((a, b) => a.name.localeCompare(b.name));
+    return results;
   },
 });
 
@@ -81,10 +100,17 @@ export const remove = mutation({
 
     const tag = await ctx.db
       .query("tags")
-      .withIndex("by_note_and_name", (q) => q.eq("noteId", args.noteId).eq("name", args.name))
+      .withIndex("by_project_and_name", (q) => q.eq("projectId", note.projectId).eq("name", args.name))
       .unique()
       .catch(() => null);
-    if (tag) await ctx.db.delete(tag._id);
+    if (tag) {
+      const rel = await ctx.db
+        .query("notesTags")
+        .withIndex("by_note_and_tag", (q) => q.eq("noteId", args.noteId).eq("tagId", tag._id))
+        .unique()
+        .catch(() => null);
+      if (rel) await ctx.db.delete(rel._id);
+    }
     return null;
   },
 });
