@@ -50,7 +50,6 @@ export function ChatApp() {
   const [selectedChatId, setSelectedChatId] = useState<Id<"chats"> | null>(
     null
   );
-  const [selectedNoteId, setSelectedNoteId] = useState<Id<"notes"> | null>(null);
   const user = useQuery(api.auth.loggedInUser);
 
   return (
@@ -111,9 +110,8 @@ export function ChatApp() {
               minSize={30}
               className="border-b bg-gray-50 min-h-0 overflow-hidden"
             >
-
               <div className="h-full overflow-hidden">
-                <GraphPanel projectId={selectedProjectId ?? undefined} onSelectNote={setSelectedNoteId}/>
+                <GraphPanel />
               </div>
             </ResizablePanel>
             <ResizableHandle withHandle />
@@ -122,23 +120,19 @@ export function ChatApp() {
               minSize={25}
               className="bg-gray-50 min-h-0 overflow-hidden"
             >
-
               <div className="h-full overflow-hidden">
                 {selectedProjectId ? (
                   <NotesSection projectId={selectedProjectId} />
                 ) : (
                   <NodeSummaryPanel
-                    proposedNodes={proposedNodes}
-                acceptedNodes={acceptedNodes}
-                onSaveOne={handleSaveOne}
-                onRejectOne={handleRejectOne}
-                onSaveMany={handleSaveMany}
-                selectedNoteId={selectedNoteId ?? undefined}
-                onClear={() => setSelectedNoteId(null)}
+                    proposedNodes={[]}
+                    acceptedNodes={[]}
+                    onSaveOne={async () => {}}
+                    onRejectOne={async () => {}}
+                    onSaveMany={async () => {}}
                   />
                 )}
               </div>
-
             </ResizablePanel>
           </ResizablePanelGroup>
         </ResizablePanel>
