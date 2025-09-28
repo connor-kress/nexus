@@ -34,6 +34,10 @@ const applicationTables = {
   tags: defineTable({
     projectId: v.id("projects"),
     name: v.string(),
+    // RGB color components for tag colorization
+    r: v.optional(v.number()),
+    g: v.optional(v.number()),
+    b: v.optional(v.number()),
   })
     .index("by_project_and_name", ["projectId", "name"])
     .index("by_project", ["projectId"])

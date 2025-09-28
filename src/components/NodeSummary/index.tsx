@@ -12,6 +12,9 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import TagsMultiSelect from "./TagsMultiSelect";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+// @ts-ignore - no types for react-colorful in this project
+import { HslColorPicker } from "react-colorful";
 
 type Props = {
   projectId: Id<"projects"> | null;
@@ -22,6 +25,7 @@ type Props = {
   onSaveMany?: (ids: string[]) => Promise<void> | void;
   className?: string;
   selectedNoteId?: Id<"notes"> | null;
+  selectedTagName?: string | null;
   onClear?: () => void;
 };
 
@@ -34,12 +38,18 @@ export default function NodeSummaryPanel({
   onSaveMany,
   className,
   selectedNoteId,
+  selectedTagName,
   onClear,
 }: Props) {
-  const [tab, setTab] = React.useState<"proposed" | "accepted">("proposed");
+  const [tab, setTab] = React.useState<"proposed" | "accepted" | "tabs">("proposed");
   const [savingAll, setSavingAll] = React.useState(false);
   const [rejectingAll, setRejectingAll] = React.useState(false);
   const [selectedTags, setSelectedTags] = React.useState<string[]>([]);
+
+  React.useEffect(() => {
+    if (selectedTagName && tab !== "tabs") setTab("tabs");
+    if (!selectedTagName && tab === "tabs") setTab("accepted");
+  }, [selectedTagName]);
 
   const notesWithTags =
     useQuery(api.notes.listWithTags, projectId ? { projectId } : "skip") ?? [];
@@ -113,6 +123,49 @@ export default function NodeSummaryPanel({
 
   const note = data?.note;
   const tags = data?.tags ?? [];
+
+  // Colors tab helpers
+  const projectTags = useQuery(
+    api.tags.listByProject,
+    projectId ? { projectId } : "skip"
+  ) || [];
+  const setColor = useMutation(api.tags.setColor);
+  const [openPickerTag, setOpenPickerTag] = React.useState<string | null>(null);
+  const [hslDraft, setHslDraft] = React.useState<{ h: number; s: number; l: number }>({ h: 200, s: 90, l: 60 });
+
+  const toHex = (r?: number, g?: number, b?: number) => {
+    const clamp = (n: number) => Math.max(0, Math.min(255, Math.round(n)));
+    const val = (n: number) => clamp(n).toString(16).padStart(2, "0");
+    if (r == null || g == null || b == null) return "#4f46e5";
+    return `#${val(r)}${val(g)}${val(b)}`;
+  };
+
+  const hslToRgb = (h: number, s: number, l: number) => {
+    s /= 100;
+    l /= 100;
+    const k = (n: number) => (n + h / 30) % 12;
+    const a = s * Math.min(l, 1 - l);
+    const f = (n: number) => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+    return { r: Math.round(255 * f(0)), g: Math.round(255 * f(8)), b: Math.round(255 * f(4)) };
+  };
+
+  const rgbToHsl = (r: number, g: number, b: number) => {
+    r /= 255; g /= 255; b /= 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    let h = 0, s = 0;
+    const l = (max + min) / 2;
+    if (max !== min) {
+      const d = max - min;
+      s = l > 0.5 ? d / (2 - max - min) : d / (max - min);
+      switch (max) {
+        case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+        case g: h = (b - r) / d + 2; break;
+        case b: h = (r - g) / d + 4; break;
+      }
+      h *= 60;
+    }
+    return { h, s: s * 100, l: l * 100 };
+  };
 
   React.useEffect(() => {
     setBodyDraft(note?.body ?? "");
@@ -198,7 +251,7 @@ export default function NodeSummaryPanel({
         ) : (
           <Tabs
             value={tab}
-            onValueChange={(v) => setTab(v as "proposed" | "accepted")}
+            onValueChange={(v) => setTab(v as any)}
             className="flex-1 flex flex-col min-h-0"
           >
             <div className="border-b px-3 pt-3">
@@ -219,6 +272,12 @@ export default function NodeSummaryPanel({
                       : acceptedNodes.length}
                   </Badge>
                 </TabsTrigger>
+                {selectedTagName ? (
+                  <TabsTrigger value="tabs">
+                    Tags
+                    <Badge className="ml-2 text-white">{projectTags.length}</Badge>
+                  </TabsTrigger>
+                ) : null}
               </TabsList>
             </div>
 
@@ -295,6 +354,71 @@ export default function NodeSummaryPanel({
                 )}
               </ScrollArea>
             </TabsContent>
+            {selectedTagName ? (
+              <TabsContent
+                value="tabs"
+                className="flex-1 flex flex-col min-h-0 p-0 data-[state=inactive]:hidden"
+              >
+                <ScrollArea className="flex-1 h-0 px-3 py-3">
+                  {!projectTags.length ? (
+                    <p className="text-sm text-gray-500">No tags.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {projectTags
+                        .slice()
+                        .sort((a, b) => a.name.localeCompare(b.name))
+                        .map((t) => {
+                          const currentHex = toHex(t.r as number | undefined, t.g as number | undefined, t.b as number | undefined);
+                          const draftRgb = hslToRgb(hslDraft.h, hslDraft.s, hslDraft.l);
+                          const liveHex = openPickerTag === String(t._id) ? toHex(draftRgb.r, draftRgb.g, draftRgb.b) : currentHex;
+                          return (
+                            <div
+                              key={String(t._id)}
+                              className="flex items-center gap-3 p-2 border rounded-md bg-white"
+                            >
+                              <Popover
+                                open={openPickerTag === String(t._id)}
+                                onOpenChange={(o) => {
+                                  if (o) {
+                                    const r = (t.r as number | undefined) ?? 79;
+                                    const g = (t.g as number | undefined) ?? 70;
+                                    const b = (t.b as number | undefined) ?? 229;
+                                    setHslDraft(rgbToHsl(r, g, b));
+                                    setOpenPickerTag(String(t._id));
+                                  } else {
+                                    setOpenPickerTag(null);
+                                  }
+                                }}
+                              >
+                                <PopoverTrigger asChild>
+                                  <button
+                                    type="button"
+                                    className="w-8 h-8 rounded border"
+                                    style={{ backgroundColor: liveHex }}
+                                  />
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-3 bg-white shadow-lg border" onPointerUp={async () => {
+                                  const { r, g, b } = hslToRgb(hslDraft.h, hslDraft.s, hslDraft.l);
+                                  await setColor({ tagId: t._id, r, g, b });
+                                  setOpenPickerTag(null);
+                                }}>
+                                  <HslColorPicker
+                                    color={hslDraft}
+                                    onChange={(c: { h: number; s: number; l: number }) => setHslDraft(c)}
+                                  />
+                                </PopoverContent>
+                              </Popover>
+                              <div className="text-sm text-gray-800 truncate max-w-[220px]">
+                                {t.name.length > 25 ? t.name.slice(0, 25) + "…" : t.name}
+                              </div>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  )}
+                </ScrollArea>
+              </TabsContent>
+            ) : null}
           </Tabs>
         )}
       </div>
