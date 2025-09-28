@@ -94,6 +94,14 @@ function GraphPanel({ projectId, onSelectNote }: GraphPanelProps) {
 		// Reset graph
 		g.clear();
 
+    // & Reset Camera if not already unzoomed
+    const camera = s.getCamera();
+    const state = camera.getState();
+    camera.animate(
+      { ...state, x: 0.5, y: 0.5, ratio: 1},
+      { duration: 1500 }
+    );
+
 		// Pre-compute layout seeding
 		const tags = data.nodes.filter((n) => n.kind === "tag");
 		const notes = data.nodes.filter((n) => n.kind !== "tag");
