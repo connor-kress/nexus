@@ -27,9 +27,12 @@
     "graphology-layout-forceatlas2": "^0.10.1",
     "lucide-react": "^0.544.0",
     "openai": "^5.23.1",
+    "prism-react-renderer": "^2.4.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-markdown": "^10.1.0",
     "react-resizable-panels": "^3.0.6",
+    "remark-gfm": "^4.0.1",
     "sigma": "^3.0.2",
     "sonner": "^2.0.3",
     "tailwind-merge": "^3.1.0"

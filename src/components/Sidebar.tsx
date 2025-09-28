@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { cn, timeAgo } from "@/lib/utils";
 import { MemberCollapse } from "./MemberCollapse";
 import { ChatAvatarStack } from "./ChatAvatarStack";
+import ChatLoadingSpinner from "./ChatLoadingSpinner";
 
 interface SidebarProps {
   selectedProjectId: Id<"projects"> | null;
@@ -398,7 +399,10 @@ export function Sidebar({
                   <div className="flex items-center justify-between gap-3">
                     {/* Left: name + date */}
                     <div className="min-w-0 flex flex-col items-start">
-                      <div className="font-medium truncate">{chat.name}</div>
+                      <div className="font-medium truncate flex items-center gap-2">
+                        <span className="truncate">{chat.name}</span>
+                        {chat.loading && <ChatLoadingSpinner />}
+                      </div>
                       <div className="text-xs text-gray-500 mt-1">
                         {timeAgo(chat._creationTime)()}
                       </div>
