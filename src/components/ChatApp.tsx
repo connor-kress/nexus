@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useQuery, useAction } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import { Sidebar } from "./Sidebar";
@@ -12,7 +12,7 @@ import {
   ResizablePanel,
   ResizableHandle,
 } from "@/components/ui/resizable";
-import { useNotesByStatus } from "./NodeSummary/hooks/useNotes";
+import { useNotes, useNoteUpdates } from "./NodeSummary/hooks/useNotes";
 
 function EmptyChat({ email }: { email?: string | null }) {
   return (
@@ -164,70 +164,52 @@ function NotesSection({
   selectedNoteId: Id<"notes"> | null;
   onClear: () => void;
 }) {
-  const { pending, accepted } = useNotesByStatus(projectId);
-  const reviewNotes = useAction(api.notes.review);
-
-  const pendingIdMap = useMemo(
-    () =>
-      new Map<string, Id<"notes">>(pending.map((n) => [String(n._id), n._id])),
-    [pending]
-  );
+  const { notes } = useNotes(projectId);
+  const { updates } = useNoteUpdates(projectId);
+  const applyUpdate = useMutation(api.notes.applyUpdate);
 
   const proposedNodes = useMemo(
     () =>
-      pending.map((n) => ({
-        id: String(n._id),
-        title: n.title,
-        summary: n.body,
-        createdAt: new Date(n._creationTime),
-        tokens: 0,
-      })),
-    [pending]
+      (updates ?? []).map(
+        (
+          u: {
+            _id: Id<"noteUpdates">;
+            _creationTime: number;
+            type: "create" | "update" | "delete";
+            title: string;
+            match: string;
+            body: string;
+          }
+        ) => ({
+          id: String(u._id),
+          title: u.title || u.match || "(untitled)",
+          summary: u.body,
+          createdAt: new Date(u._creationTime),
+          tokens: 0,
+          updateType: u.type,
+        })
+      ),
+    [updates]
   );
 
   const acceptedNodes = useMemo(
     () =>
-      accepted.map((n) => ({
+      (notes ?? []).map((n: { _id: Id<"notes">; title: string; body: string; _creationTime: number }) => ({
         id: String(n._id),
         title: n.title,
         summary: n.body,
         createdAt: new Date(n._creationTime),
         tokens: 0,
       })),
-    [accepted]
+    [notes]
   );
 
   const handleSaveOne = async (id: string) => {
-    const nid = pendingIdMap.get(id);
-    if (!nid) return;
-    await reviewNotes({
-      projectId,
-      approveIds: [nid],
-      rejectIds: [],
-    });
+    // id refers to the proposed node id, which is the noteUpdates _id
+    await applyUpdate({ updateId: id as unknown as Id<"noteUpdates"> });
   };
-
-  const handleRejectOne = async (id: string) => {
-    const nid = pendingIdMap.get(id);
-    if (!nid) return;
-    await reviewNotes({
-      projectId,
-      approveIds: [],
-      rejectIds: [nid],
-    });
-  };
-
-  const handleSaveMany = async (ids: string[]) => {
-    const nids = ids
-      .map((id) => pendingIdMap.get(id))
-      .filter((x): x is Id<"notes"> => !!x);
-    if (nids.length === 0) return;
-    await reviewNotes({
-      projectId,
-      approveIds: nids,
-      rejectIds: [],
-    });
-  };
+  const handleRejectOne = async (_id: string) => {};
+  const handleSaveMany = async (_ids: string[]) => {};
 
   return (
     <NodeSummaryPanel

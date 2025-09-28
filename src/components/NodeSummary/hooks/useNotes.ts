@@ -2,18 +2,19 @@ import { useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 
-export function useNotesByStatus(projectId: Id<"projects">) {
-  const pending = useQuery(api.notes.listByProjectAndStatus, {
-    projectId,
-    status: "pending",
-  });
-  const accepted = useQuery(api.notes.listByProjectAndStatus, {
-    projectId,
-    status: "accepted",
-  });
+export function useNotes(projectId: Id<"projects">) {
+  const all = useQuery(api.notes.listByProject, { projectId });
+  // With status removed, treat all notes as "accepted" and none as "pending".
   return {
-    pending: pending ?? [],
-    accepted: accepted ?? [],
-    loading: pending === undefined || accepted === undefined,
+    notes: all ?? [],
+    loading: all === undefined,
+  };
+}
+
+export function useNoteUpdates(projectId: Id<"projects">) {
+  const updates = useQuery(api.notes.listUpdates, { projectId });
+  return {
+    updates: updates ?? [],
+    loading: updates === undefined,
   };
 }

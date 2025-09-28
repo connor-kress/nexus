@@ -25,13 +25,6 @@ const applicationTables = {
     projectId: v.id("projects"),
     title: v.string(),
     body: v.string(),
-    status: v.optional(
-      v.union(
-        v.literal("pending"),
-        v.literal("accepted"),
-        v.literal("rejected")
-      )
-    ),
   })
     .index("by_project", ["projectId"])
     .index("by_project_and_title", ["projectId", "title"]),
@@ -47,12 +40,35 @@ const applicationTables = {
 
   // Note-Tag relation
   notesTags: defineTable({
-    noteId: v.id("notes"),
+    noteId: v.optional(v.id("notes")),
     tagId: v.id("tags"),
+    // Allow associating tags to either a note OR a noteUpdate (proposal)
+    noteUpdateId: v.optional(v.id("noteUpdates")),
   })
     .index("by_note", ["noteId"])
     .index("by_tag", ["tagId"])
-    .index("by_note_and_tag", ["noteId", "tagId"]),
+    .index("by_note_and_tag", ["noteId", "tagId"])
+    .index("by_update", ["noteUpdateId"]) 
+    .index("by_update_and_tag", ["noteUpdateId", "tagId"]),
+
+  // Note updates queue/log
+  noteUpdates: defineTable({
+    projectId: v.id("projects"),
+    userId: v.id("users"),
+    type: v.union(
+      v.literal("create"),
+      v.literal("update"),
+      v.literal("delete")
+    ),
+    // Strings default to empty on insert to avoid nullability
+    match: v.string(),
+    title: v.string(),
+    body: v.string(),
+  })
+    .index("by_project", ["projectId"])
+    .index("by_user", ["userId"]) 
+    .index("by_user_and_project", ["userId", "projectId"]) 
+    .index("by_user_project_and_type", ["userId", "projectId", "type"]),
 
   // Memberships: many users per project
   projectUsers: defineTable({

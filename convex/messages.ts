@@ -109,6 +109,32 @@ function getSummaryPrompt(allMessages: Array<Doc<"messages">>, notes: Array<Note
   ];
 }
 
+function getReplyPrompt(
+  conversation: Array<{ role: string; content: string }>,
+  notes: Array<NoteWithTags>
+) {
+  return [
+    {
+      role: "system",
+      content:
+        "You are a helpful assistant for a project. Use the provided project notes as context. If the notes contain relevant facts or decisions, incorporate them in your reply. Keep responses concise and practical.",
+    },
+    {
+      role: "user",
+      content: `Here are the current project notes in JSON (title, body, tags):\n${JSON.stringify(
+        notes.map((n) => ({
+          title: n.note.title,
+          body: n.note.body,
+          tags: n.tags.map((t) => t.name),
+        })),
+        null,
+        2
+      )}`,
+    },
+    ...conversation,
+  ];
+}
+
 export const list = query({
   args: { chatId: v.id("chats") },
   handler: async (ctx, args) => {
@@ -215,11 +241,18 @@ export const sendMessage = action({
         chatId: args.chatId,
       });
 
-    const openRouterMessages: Array<{ role: string; content: string }> =
-      messages.map((msg) => ({
-        role: msg.role,
-        content: msg.content,
-      }));
+    const openRouterMessages: Array<{ role: string; content: string }> = messages.map((msg) => ({
+      role: msg.role,
+      content: msg.content,
+    }));
+
+    // Load notes context for this chat's project and build a reply prompt
+    const chat = await ctx.runQuery(api.chats.get, { id: args.chatId });
+    const notesForReply: Array<NoteWithTags> = await ctx.runQuery(
+      api.notes.listWithTags,
+      { projectId: chat.projectId }
+    );
+    const replyPrompt = getReplyPrompt(openRouterMessages, notesForReply);
 
     let assistantMessage: string | null = null;
 
@@ -236,7 +269,7 @@ export const sendMessage = action({
           },
           body: JSON.stringify({
             model: DEFAULT_MODEL,
-            messages: openRouterMessages,
+            messages: replyPrompt,
             temperature: 0.7,
           }),
         }
@@ -272,11 +305,10 @@ export const sendMessage = action({
     try {
       const chat = await ctx.runQuery(api.chats.get, { id: args.chatId });
       const allMessages: Array<Doc<"messages">> = await ctx.runQuery(api.messages.list, { chatId: args.chatId });
-      const notes: Array<NoteWithTags> =
-        await ctx.runQuery(api.notes.listWithTagsByStatus, {
-          projectId: chat.projectId,
-          status: "accepted",
-        });
+      const notes: Array<NoteWithTags> = await ctx.runQuery(
+        api.notes.listWithTags,
+        { projectId: chat.projectId }
+      );
       const summaryPrompt = getSummaryPrompt(allMessages, notes, args.content);
       const sumRes: Response = await fetch(
         "https://openrouter.ai/api/v1/chat/completions",
@@ -298,7 +330,7 @@ export const sendMessage = action({
       }
       const sumData: any = await sumRes.json();
       const raw = sumData.choices?.[0]?.message?.content ?? "";
-      let debug = false;
+      let debug = true; // TODO: update
       if (debug) console.log("DATA =", raw);
       let parsed: SummaryResponse;
       try {
@@ -315,27 +347,29 @@ export const sendMessage = action({
       //       .slice(0, 5)
       //   : [];
       for (const note of parsed.new) {
-        await ctx.runMutation(api.notes.create, {
+        await ctx.runMutation(api.notes.enqueueUpdate, {
           projectId: chat.projectId,
+          type: "create",
           title: note.title,
           body: note.body,
-          tagNames: note.tags,
-          status: "pending",
+          tagNames: Array.isArray(note.tags) ? note.tags : [],
         });
       }
       for (const upd of parsed.updated) {
-        await ctx.runMutation(api.notes.updateByProjectAndMatchTitle, {
+        await ctx.runMutation(api.notes.enqueueUpdate, {
           projectId: chat.projectId,
+          type: "update",
           match: upd.match,
           title: upd.title,
           body: upd.body,
-          tagNames: upd.tags,
+          tagNames: Array.isArray(upd.tags) ? upd.tags : [],
         });
       }
       for (const del of parsed.deleted) {
-        await ctx.runMutation(api.notes.removeByProjectAndTitle, {
+        await ctx.runMutation(api.notes.enqueueUpdate, {
           projectId: chat.projectId,
-          title: del.match,
+          type: "delete",
+          match: del.match,
         });
       }
     } catch (summaryError) {
