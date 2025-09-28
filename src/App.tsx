@@ -4,6 +4,7 @@ import { SignInForm } from "./SignInForm";
 import { SignOutButton } from "./SignOutButton";
 import { Toaster } from "sonner";
 import { ChatApp } from "./components/ChatApp";
+import { NexusLogo } from "./components/NexusLogo";
 
 export default function App() {
   return (
@@ -17,7 +18,7 @@ export default function App() {
           <div className="w-full max-w-md mx-auto p-8">
             <div className="text-center mb-8">
               <h1 className="text-3xl font-bold text-gray-900 mb-2">
-                AI Chat Organizer
+                <NexusLogo size={32} pulse wordmark textSize="text-3xl" />
               </h1>
               <p className="text-gray-600">
                 Sign in to organize your AI conversations by projects

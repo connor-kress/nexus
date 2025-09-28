@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/resizable";
 import { useNotes, useNoteUpdates } from "./NodeSummary/hooks/useNotes";
 import React from "react";
+import { NexusLogo } from "./NexusLogo";
 
 function EmptyChat({ email }: { email?: string | null }) {
   return (
@@ -79,9 +80,7 @@ export function ChatApp() {
         >
           <div className="flex h-full min-h-0 flex-col">
             <div className="p-4 border-b flex justify-between items-center">
-              <h1 className="text-xl font-semibold text-gray-900">
-                AI Chat Organizer
-              </h1>
+              <NexusLogo size={32} pulse wordmark textSize="text-3xl" />
               <SignOutButton />
             </div>
             <div className="flex-1 min-h-0 overflow-auto">
