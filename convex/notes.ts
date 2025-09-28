@@ -202,12 +202,15 @@ export const listByProjectAndStatus = query({
       .unique()
       .catch(() => null);
     if (!membership) return [];
-    const notes = await ctx.db
+    const allNotes = await ctx.db
       .query("notes")
       .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
       .order("desc")
       .collect();
-    return notes.filter((n) => (n.status ?? "pending") === args.status);
+    const notes = allNotes.filter(
+      (n) => (n.status ?? "pending") === args.status
+    );
+    return notes;
   },
 });
 
@@ -458,11 +461,14 @@ export const graphForProject = query({
       .unique()
       .catch(() => null);
     if (!membership) return { nodes: [], edges: [] };
-    const notes = await ctx.db
+    const allNotes = await ctx.db
       .query("notes")
       .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
       .order("desc")
       .collect();
+    const notes = allNotes.filter(
+      (n) => (n.status ?? "pending") === "accepted"
+    );
     const noteIdToTagNames: Record<string, Set<string>> = {};
     const tagNamesInProject: Set<string> = new Set();
     for (const note of notes) {

@@ -3,6 +3,9 @@ import { mutation, query, action } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { api } from "./_generated/api";
 
+// const DEFAULT_MODEL = "x-ai/grok-4-fast:free";
+const DEFAULT_MODEL = "openai/gpt-5-nano";
+
 export const list = query({
   args: { chatId: v.id("chats") },
   handler: async (ctx, args) => {
@@ -97,7 +100,7 @@ export const sendMessage = action({
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            model: "x-ai/grok-4-fast:free",
+            model: DEFAULT_MODEL,
             messages: openRouterMessages,
             temperature: 0.7,
           }),
@@ -145,7 +148,7 @@ export const sendMessage = action({
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              model: "x-ai/grok-4-fast:free",
+              model: DEFAULT_MODEL,
               messages: summaryPrompt,
               temperature: 0.2,
             }),
@@ -173,6 +176,7 @@ export const sendMessage = action({
             title,
             body,
             tagNames,
+            status: "pending",
           });
         }
       }
