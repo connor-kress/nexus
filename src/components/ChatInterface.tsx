@@ -5,6 +5,9 @@ import { Id } from "../../convex/_generated/dataModel";
 import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
 import { toast } from "sonner";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import MarkdownBubble from "./MarkdownBubble";
 
 interface ChatInterfaceProps {
   chatId: Id<"chats">;
@@ -91,7 +94,7 @@ export function ChatInterface({ chatId }: ChatInterfaceProps) {
                   : "bg-gray-200 text-gray-900"
               }`}
             >
-              <div className="whitespace-pre-wrap">{msg.content}</div>
+              <MarkdownBubble text={msg.content} invert={msg.role === "user"} />
             </div>
           </div>
         ))}
