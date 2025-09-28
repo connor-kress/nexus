@@ -9,9 +9,10 @@ import { Id } from "../../../convex/_generated/dataModel";
 type GraphPanelProps = {
   projectId?: Id<"projects"> | null;
   onSelectNote?: (noteId: Id<"notes"> | null) => void;
+  onSelectTag?: (tagName: string | null) => void;
 };
 
-function GraphPanel({ projectId, onSelectNote }: GraphPanelProps) {
+function GraphPanel({ projectId, onSelectNote, onSelectTag }: GraphPanelProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const sigmaRef = useRef<Sigma | null>(null);
   const graphRef = useRef<Graph | null>(null);
@@ -57,8 +58,13 @@ function GraphPanel({ projectId, onSelectNote }: GraphPanelProps) {
       s.on("clickNode", ({ node }: { node: string }) => {
         const nKind = g.getNodeAttribute(node, "kind");
         const noteId = g.getNodeAttribute(node, "noteId");
-        if (nKind === "note" && noteId && onSelectNote) {
-          onSelectNote(noteId as Id<"notes">);
+        if (nKind === "note") {
+          if (noteId && onSelectNote) onSelectNote(noteId as Id<"notes">);
+          if (onSelectTag) onSelectTag(null);
+        } else if (nKind === "tag") {
+          const label = g.getNodeAttribute(node, "label") as string;
+          if (onSelectNote) onSelectNote(null as unknown as Id<"notes"> | null);
+          if (onSelectTag) onSelectTag(label);
         }
       });
 
@@ -77,6 +83,7 @@ function GraphPanel({ projectId, onSelectNote }: GraphPanelProps) {
 
       s.on("clickStage", () => {
         if (onSelectNote) onSelectNote(null as unknown as Id<"notes"> | null);
+        if (onSelectTag) onSelectTag(null);
       });
     }
 
@@ -186,24 +193,53 @@ function GraphPanel({ projectId, onSelectNote }: GraphPanelProps) {
         x: Math.random() * width,
         y: Math.random() * height,
       };
+      const r = (n as any).r as number | undefined;
+      const gcol = (n as any).g as number | undefined;
+      const b = (n as any).b as number | undefined;
+      const color =
+        n.kind === "tag" && r != null && gcol != null && b != null
+          ? `rgb(${r}, ${gcol}, ${b})`
+          : n.kind === "tag"
+          ? "#4f46e5"
+          : "#64748b";
       g.addNode(n.id, {
         label: n.title,
         kind: n.kind,
         noteId: n.noteId ?? null,
         body: n.body ?? null,
         size: n.kind === "tag" ? 10 : 8,
+        color,
         x: pos.x,
         y: pos.y,
       });
     }
 
-    // Add edges
+    // Add edges with color derived from tag if applicable
     for (const e of data.edges) {
       if (g.hasNode(e.source) && g.hasNode(e.target)) {
+        const sourceKind = g.getNodeAttribute(e.source, "kind");
+        const targetKind = g.getNodeAttribute(e.target, "kind");
+        let edgeColor: string | undefined;
+        // If connecting tag -> note (order agnostic), use a slightly darker tag color
+        const tagNodeId = sourceKind === "tag" ? e.source : targetKind === "tag" ? e.target : null;
+        if (tagNodeId) {
+          const tagColor: string | undefined = g.getNodeAttribute(tagNodeId, "color");
+          if (tagColor) {
+            // darken by 15%
+            const m = /rgb\((\d+),\s*(\d+),\s*(\d+)\)/.exec(tagColor);
+            if (m) {
+              const r = Math.max(0, Math.floor(parseInt(m[1], 10) * 0.85));
+              const gVal = Math.max(0, Math.floor(parseInt(m[2], 10) * 0.85));
+              const b = Math.max(0, Math.floor(parseInt(m[3], 10) * 0.85));
+              edgeColor = `rgb(${r}, ${gVal}, ${b})`;
+            }
+          }
+        }
+
+        const attrs = edgeColor ? { color: edgeColor } : {};
         if (!g.hasEdge(e.source, e.target)) {
-          // best-effort unique key
-          g.addEdgeWithKey?.(e.id, e.source, e.target) ??
-            g.addEdge(e.source, e.target);
+          g.addEdgeWithKey?.(e.id, e.source, e.target, attrs as any) ??
+            g.addEdge(e.source, e.target, attrs as any);
         }
       }
     }

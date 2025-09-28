@@ -55,6 +55,7 @@ export function ChatApp() {
   const [selectedNoteId, setSelectedNoteId] = useState<Id<"notes"> | null>(
     null
   );
+  const [selectedTagName, setSelectedTagName] = useState<string | null>(null);
   const user = useQuery(api.auth.loggedInUser);
   const leaveAll = useMutation(api.chats.leaveAll);
 
@@ -139,6 +140,7 @@ export function ChatApp() {
                     <GraphPanel
                       projectId={selectedProjectId!}
                       onSelectNote={setSelectedNoteId}
+                      onSelectTag={setSelectedTagName}
                     />
                   </div>
                 </ResizablePanel>
@@ -154,6 +156,7 @@ export function ChatApp() {
                     <NotesSection
                       projectId={selectedProjectId!}
                       selectedNoteId={selectedNoteId}
+                      selectedTagName={selectedTagName}
                       onClear={() => setSelectedNoteId(null)}
                     />
                   </div>
@@ -170,10 +173,12 @@ export function ChatApp() {
 function NotesSection({
   projectId,
   selectedNoteId,
+  selectedTagName,
   onClear,
 }: {
   projectId: Id<"projects">;
   selectedNoteId: Id<"notes"> | null;
+  selectedTagName: string | null;
   onClear: () => void;
 }) {
   const { notes } = useNotes(projectId);
@@ -244,6 +249,7 @@ function NotesSection({
       onRejectOne={handleRejectOne}
       onSaveMany={handleSaveMany}
       selectedNoteId={selectedNoteId}
+      selectedTagName={selectedTagName}
       onClear={onClear}
     />
   );

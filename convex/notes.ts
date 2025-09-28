@@ -1,7 +1,9 @@
 import { v } from "convex/values";
 import { mutation, query, action } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { api } from "./_generated/api";
+import { Id } from "./_generated/dataModel";
 
 const noteValidator = v.object({
   _id: v.id("notes"),
@@ -16,6 +18,9 @@ const tagValidator = v.object({
   _creationTime: v.number(),
   projectId: v.id("projects"),
   name: v.string(),
+  r: v.optional(v.number()),
+  g: v.optional(v.number()),
+  b: v.optional(v.number()),
 });
 
 export const create = mutation({
@@ -44,16 +49,10 @@ export const create = mutation({
     });
     if (args.tagNames && args.tagNames.length > 0) {
       for (const name of args.tagNames) {
-        const tag = await ctx.db
-          .query("tags")
-          .withIndex("by_project_and_name", (q) =>
-            q.eq("projectId", args.projectId).eq("name", name)
-          )
-          .unique()
-          .catch(() => null);
-        const tagId =
-          tag?._id ??
-          (await ctx.db.insert("tags", { projectId: args.projectId, name }));
+        const tagId: Id<"tags"> = await ctx.runMutation(internal.tags.ensureWithColor, {
+          projectId: args.projectId,
+          name,
+        });
         const rel = await ctx.db
           .query("notesTags")
           .withIndex("by_note_and_tag", (q) =>
@@ -86,19 +85,10 @@ export const addTag = mutation({
       .unique()
       .catch(() => null);
     if (!membership) throw new Error("Forbidden");
-    const tag = await ctx.db
-      .query("tags")
-      .withIndex("by_project_and_name", (q) =>
-        q.eq("projectId", note.projectId).eq("name", args.name)
-      )
-      .unique()
-      .catch(() => null);
-    const tagId =
-      tag?._id ??
-      (await ctx.db.insert("tags", {
-        projectId: note.projectId,
-        name: args.name,
-      }));
+    const tagId: Id<"tags"> = await ctx.runMutation(internal.tags.ensureWithColor, {
+      projectId: note.projectId,
+      name: args.name,
+    });
     const rel = await ctx.db
       .query("notesTags")
       .withIndex("by_note_and_tag", (q) =>
@@ -349,14 +339,10 @@ export const enqueueUpdate = mutation({
         new Set(args.tagNames.map((n) => n.trim()).filter((n) => n.length > 0))
       );
       for (const name of names) {
-        const existing = await ctx.db
-          .query("tags")
-          .withIndex("by_project_and_name", (q) =>
-            q.eq("projectId", args.projectId).eq("name", name)
-          )
-          .unique()
-          .catch(() => null);
-        const tagId = existing?._id ?? (await ctx.db.insert("tags", { projectId: args.projectId, name }));
+        const tagId: Id<"tags"> = await ctx.runMutation(internal.tags.ensureWithColor, {
+          projectId: args.projectId,
+          name,
+        });
         const rel = await ctx.db
           .query("notesTags")
           .withIndex("by_update_and_tag", (q) => q.eq("noteUpdateId", updateId).eq("tagId", tagId as any))
@@ -386,15 +372,11 @@ export const upsertTag = mutation({
       .catch(() => null);
     if (!membership) throw new Error("Forbidden");
 
-    const existing = await ctx.db
-      .query("tags")
-      .withIndex("by_project_and_name", (q) =>
-        q.eq("projectId", args.projectId).eq("name", args.name)
-      )
-      .unique()
-      .catch(() => null);
-    if (existing) return existing._id;
-    return await ctx.db.insert("tags", { projectId: args.projectId, name: args.name });
+    const tagId: Id<"tags"> = await ctx.runMutation(internal.tags.ensureWithColor, {
+      projectId: args.projectId,
+      name: args.name,
+    });
+    return tagId;
   },
 });
 
@@ -709,6 +691,9 @@ export const graphForProject = query({
         title: v.string(),
         body: v.optional(v.string()),
         noteId: v.optional(v.id("notes")),
+        r: v.optional(v.number()),
+        g: v.optional(v.number()),
+        b: v.optional(v.number()),
       })
     ),
     edges: v.array(
@@ -736,6 +721,13 @@ export const graphForProject = query({
       .order("desc")
       .collect();
     const noteIdToTagNames: Record<string, Set<string>> = {};
+    // Load all tags in project to include color
+    const tagsInProject = await ctx.db
+      .query("tags")
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+      .collect();
+    const tagNameToDoc: Record<string, { name: string; r?: number; g?: number; b?: number }> = {};
+    for (const t of tagsInProject) tagNameToDoc[t.name] = { name: t.name, r: t.r ?? undefined, g: t.g ?? undefined, b: t.b ?? undefined };
     const tagNamesInProject: Set<string> = new Set();
     for (const note of notes) {
       const rels = await ctx.db
@@ -757,10 +749,14 @@ export const graphForProject = query({
       title: string;
       body?: string;
       noteId?: any;
+      r?: number;
+      g?: number;
+      b?: number;
     }> = [];
     const edges: Array<{ id: string; source: string; target: string }> = [];
     for (const name of tagNamesInProject) {
-      nodes.push({ id: `tag:${name}`, kind: "tag", title: name });
+      const t = tagNameToDoc[name];
+      nodes.push({ id: `tag:${name}`, kind: "tag", title: name, r: t?.r, g: t?.g, b: t?.b });
     }
     for (const note of notes) {
       const noteNodeId = `note:${String(note._id)}`;
