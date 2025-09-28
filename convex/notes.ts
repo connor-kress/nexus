@@ -383,6 +383,133 @@ export const setStatus = mutation({
   },
 });
 
+export const removeByProjectAndTitle = mutation({
+  args: {
+    projectId: v.id("projects"),
+    title: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+    const membership = await ctx.db
+      .query("projectUsers")
+      .withIndex("by_user_and_project", (q) =>
+        q.eq("userId", userId).eq("projectId", args.projectId)
+      )
+      .unique()
+      .catch(() => null);
+    if (!membership) throw new Error("Forbidden");
+
+    const note = await ctx.db
+      .query("notes")
+      .withIndex("by_project_and_title", (q) =>
+        q.eq("projectId", args.projectId).eq("title", args.title)
+      )
+      .unique()
+      .catch(() => null);
+    if (!note) return null;
+
+    const rels = await ctx.db
+      .query("notesTags")
+      .withIndex("by_note", (q) => q.eq("noteId", note._id))
+      .collect();
+    for (const rel of rels) {
+      await ctx.db.delete(rel._id);
+    }
+
+    await ctx.db.delete(note._id);
+    return null;
+  },
+});
+
+export const updateByProjectAndMatchTitle = mutation({
+  args: {
+    projectId: v.id("projects"),
+    match: v.string(),
+    title: v.string(),
+    body: v.string(),
+    tagNames: v.array(v.string()),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+    const membership = await ctx.db
+      .query("projectUsers")
+      .withIndex("by_user_and_project", (q) =>
+        q.eq("userId", userId).eq("projectId", args.projectId)
+      )
+      .unique()
+      .catch(() => null);
+    if (!membership) throw new Error("Forbidden");
+
+    const note = await ctx.db
+      .query("notes")
+      .withIndex("by_project_and_title", (q) =>
+        q.eq("projectId", args.projectId).eq("title", args.match)
+      )
+      .unique()
+      .catch(() => null);
+    if (!note) return null;
+
+    // Update basic fields
+    await ctx.db.patch(note._id, { title: args.title, body: args.body });
+
+    // Sync tags: make relations match tagNames exactly
+    const desiredNames = Array.from(
+      new Set(args.tagNames.map((n) => n.trim()).filter((n) => n.length > 0))
+    );
+
+    // Resolve desired tag ids (create any missing)
+    const desiredTagIds: string[] = [] as any;
+    for (const name of desiredNames) {
+      const existingTag = await ctx.db
+        .query("tags")
+        .withIndex("by_project_and_name", (q) =>
+          q.eq("projectId", args.projectId).eq("name", name)
+        )
+        .unique()
+        .catch(() => null);
+      const tagId = existingTag?._id ?? (await ctx.db.insert("tags", { projectId: args.projectId, name }));
+      desiredTagIds.push(tagId as any);
+    }
+
+    // Current relations
+    const currentRels = await ctx.db
+      .query("notesTags")
+      .withIndex("by_note", (q) => q.eq("noteId", note._id))
+      .collect();
+    const currentTagIdSet = new Set(currentRels.map((r) => String(r.tagId)));
+    const desiredTagIdSet = new Set(desiredTagIds.map((id) => String(id)));
+
+    // Remove relations not desired
+    for (const rel of currentRels) {
+      if (!desiredTagIdSet.has(String(rel.tagId))) {
+        await ctx.db.delete(rel._id);
+      }
+    }
+
+    // Add missing relations
+    for (const tagId of desiredTagIds) {
+      if (!currentTagIdSet.has(String(tagId))) {
+        const existingRel = await ctx.db
+          .query("notesTags")
+          .withIndex("by_note_and_tag", (q) =>
+            q.eq("noteId", note._id).eq("tagId", tagId as any)
+          )
+          .unique()
+          .catch(() => null);
+        if (!existingRel) {
+          await ctx.db.insert("notesTags", { noteId: note._id, tagId: tagId as any });
+        }
+      }
+    }
+
+    return null;
+  },
+});
+
 export const isMember = query({
   args: { projectId: v.id("projects") },
   returns: v.boolean(),

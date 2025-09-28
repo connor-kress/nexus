@@ -32,7 +32,9 @@ const applicationTables = {
         v.literal("rejected")
       )
     ),
-  }).index("by_project", ["projectId"]),
+  })
+    .index("by_project", ["projectId"])
+    .index("by_project_and_title", ["projectId", "title"]),
 
   // Tags catalog per project (normalized)
   tags: defineTable({

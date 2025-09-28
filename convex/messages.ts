@@ -298,19 +298,14 @@ export const sendMessage = action({
       }
       const sumData: any = await sumRes.json();
       const raw = sumData.choices?.[0]?.message?.content ?? "";
-      // console.log("********************************************************************");
-      // console.log("DATA =", raw);
-      // console.log("********************************************************************");
+      let debug = false;
+      if (debug) console.log("DATA =", raw);
       let parsed: SummaryResponse;
       try {
         parsed = JSON.parse(raw);
-        // console.log("********************************************************************");
-        // console.log("PARSED =", parsed);
-        // console.log("********************************************************************");
+        if (debug) console.log("PARSED =", parsed);
       } catch (error) {
-        // console.log("********************************************************************");
-        // console.log("PARSING ERROR =", error);
-        // console.log("********************************************************************");
+        if (debug) console.log("PARSING ERROR =", error);
         return assistantMessage;
       }
       // const tagNames = Array.isArray(parsed.tags)
@@ -326,6 +321,21 @@ export const sendMessage = action({
           body: note.body,
           tagNames: note.tags,
           status: "pending",
+        });
+      }
+      for (const upd of parsed.updated) {
+        await ctx.runMutation(api.notes.updateByProjectAndMatchTitle, {
+          projectId: chat.projectId,
+          match: upd.match,
+          title: upd.title,
+          body: upd.body,
+          tagNames: upd.tags,
+        });
+      }
+      for (const del of parsed.deleted) {
+        await ctx.runMutation(api.notes.removeByProjectAndTitle, {
+          projectId: chat.projectId,
+          title: del.match,
         });
       }
     } catch (summaryError) {
