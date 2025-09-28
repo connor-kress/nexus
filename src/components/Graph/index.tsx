@@ -106,6 +106,7 @@ function GraphPanel({ projectId, onSelectNote }: GraphPanelProps) {
 		const tags = data.nodes.filter((n) => n.kind === "tag");
 		const notes = data.nodes.filter((n) => n.kind !== "tag");
 
+<<<<<<< Updated upstream
 		const container = containerRef.current;
 		const rect = container?.getBoundingClientRect();
 		const width = rect?.width ?? 800;
@@ -339,6 +340,40 @@ function GraphPanel({ projectId, onSelectNote }: GraphPanelProps) {
 			</div>
 		</div>
 	);
+=======
+  return (
+    <div className="h-full w-full overflow-auto p-3">
+      <div
+        ref={containerRef}
+        onMouseMove={(e) => {
+          if (!containerRef.current) return;
+          const rect = containerRef.current.getBoundingClientRect();
+          setMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+        }}
+        className="h-full rounded-xl border border-gray-200 bg-white shadow-sm relative"
+      >
+        {hoverInfo && mousePos && (
+          <div
+            className="absolute z-10 max-w-xs rounded-md border border-gray-200 bg-white shadow px-3 py-2 text-xs text-gray-800"
+            style={{ left: mousePos.x + 12, top: mousePos.y + 12 }}
+          >
+            <div>
+              <span className="font-semibold">Title:</span> {hoverInfo.title}
+            </div>
+            {hoverInfo.description ? (
+              <div className="mt-1">
+                <span className="font-semibold">Description:</span>{" "}
+                {hoverInfo.description.length > 100
+                  ? hoverInfo.description.slice(0, 100) + "…"
+                  : hoverInfo.description}
+              </div>
+            ) : null}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+>>>>>>> Stashed changes
 }
 
 export default GraphPanel;
