@@ -3,7 +3,8 @@
 import * as React from "react";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
+import { cn, timeAgo } from "@/lib/utils";
+import { time } from "console";
 
 export type NodeItem = {
   id: string;
@@ -63,7 +64,7 @@ export function NodeCard({
           )}
           {node.createdAt && (
             <span className="text-xs text-gray-500">
-              {formatTime(node.createdAt)}
+              {timeAgo(node.createdAt)()}
             </span>
           )}
         </div>
@@ -97,10 +98,4 @@ export function NodeCard({
       )}
     </div>
   );
-}
-
-function formatTime(t: string | number | Date) {
-  const d = new Date(t);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleString();
 }

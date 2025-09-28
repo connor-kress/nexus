@@ -13,7 +13,7 @@ export function MemberCollapse({
   projectId,
   myRole,
   onInviteClick,
-  defaultOpen = true,
+  defaultOpen = false,
 }: {
   projectId: Id<"projects">;
   myRole: Role | null;

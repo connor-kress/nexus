@@ -6,7 +6,7 @@ import { Id } from "../../convex/_generated/dataModel";
 import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import { cn, timeAgo } from "@/lib/utils";
 import { MemberCollapse } from "./MemberCollapse";
 import { ChatAvatarStack } from "./ChatAvatarStack";
 
@@ -337,7 +337,7 @@ export function Sidebar({
                 projectId={selectedProjectId}
                 myRole={(myRole as any) ?? null}
                 onInviteClick={() => setShowInvite(true)}
-                defaultOpen={true}
+                defaultOpen={false}
               />
             )}
             <div className="flex justify-between items-center mb-4">
@@ -397,10 +397,10 @@ export function Sidebar({
                 >
                   <div className="flex items-center justify-between gap-3">
                     {/* Left: name + date */}
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex flex-col items-start">
                       <div className="font-medium truncate">{chat.name}</div>
                       <div className="text-xs text-gray-500 mt-1">
-                        {new Date(chat._creationTime).toLocaleDateString()}
+                        {timeAgo(chat._creationTime)()}
                       </div>
                     </div>
 
@@ -512,7 +512,7 @@ export function Sidebar({
                   </div>
                 )}
                 <div className="text-xs text-gray-500 mt-1">
-                  {new Date(project._creationTime).toLocaleDateString()}
+                  {timeAgo(project._creationTime)()}
                 </div>
               </button>
             ))}
