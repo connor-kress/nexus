@@ -46,10 +46,7 @@ export default function NodeSummaryPanel({
   const [rejectingAll, setRejectingAll] = React.useState(false);
   const [selectedTags, setSelectedTags] = React.useState<string[]>([]);
 
-  React.useEffect(() => {
-    if (selectedTagName && tab !== "tabs") setTab("tabs");
-    if (!selectedTagName && tab === "tabs") setTab("accepted");
-  }, [selectedTagName]);
+  // Tabs are now persistent; do not auto-switch based on selectedTagName
 
   const notesWithTags =
     useQuery(api.notes.listWithTags, projectId ? { projectId } : "skip") ?? [];
@@ -272,12 +269,10 @@ export default function NodeSummaryPanel({
                       : acceptedNodes.length}
                   </Badge>
                 </TabsTrigger>
-                {selectedTagName ? (
-                  <TabsTrigger value="tabs">
-                    Tags
-                    <Badge className="ml-2 text-white">{projectTags.length}</Badge>
-                  </TabsTrigger>
-                ) : null}
+                <TabsTrigger value="tabs">
+                  Tags
+                  <Badge className="ml-2 text-white">{projectTags.length}</Badge>
+                </TabsTrigger>
               </TabsList>
             </div>
 
@@ -354,71 +349,69 @@ export default function NodeSummaryPanel({
                 )}
               </ScrollArea>
             </TabsContent>
-            {selectedTagName ? (
-              <TabsContent
-                value="tabs"
-                className="flex-1 flex flex-col min-h-0 p-0 data-[state=inactive]:hidden"
-              >
-                <ScrollArea className="flex-1 h-0 px-3 py-3">
-                  {!projectTags.length ? (
-                    <p className="text-sm text-gray-500">No tags.</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {projectTags
-                        .slice()
-                        .sort((a, b) => a.name.localeCompare(b.name))
-                        .map((t) => {
-                          const currentHex = toHex(t.r as number | undefined, t.g as number | undefined, t.b as number | undefined);
-                          const draftRgb = hslToRgb(hslDraft.h, hslDraft.s, hslDraft.l);
-                          const liveHex = openPickerTag === String(t._id) ? toHex(draftRgb.r, draftRgb.g, draftRgb.b) : currentHex;
-                          return (
-                            <div
-                              key={String(t._id)}
-                              className="flex items-center gap-3 p-2 border rounded-md bg-white"
-                            >
-                              <Popover
-                                open={openPickerTag === String(t._id)}
-                                onOpenChange={(o) => {
-                                  if (o) {
-                                    const r = (t.r as number | undefined) ?? 79;
-                                    const g = (t.g as number | undefined) ?? 70;
-                                    const b = (t.b as number | undefined) ?? 229;
-                                    setHslDraft(rgbToHsl(r, g, b));
-                                    setOpenPickerTag(String(t._id));
-                                  } else {
-                                    setOpenPickerTag(null);
-                                  }
-                                }}
-                              >
-                                <PopoverTrigger asChild>
-                                  <button
-                                    type="button"
-                                    className="w-8 h-8 rounded border"
-                                    style={{ backgroundColor: liveHex }}
-                                  />
-                                </PopoverTrigger>
-                                <PopoverContent className="w-auto p-3 bg-white shadow-lg border" onPointerUp={async () => {
-                                  const { r, g, b } = hslToRgb(hslDraft.h, hslDraft.s, hslDraft.l);
-                                  await setColor({ tagId: t._id, r, g, b });
+            <TabsContent
+              value="tabs"
+              className="flex-1 flex flex-col min-h-0 p-0 data-[state=inactive]:hidden"
+            >
+              <ScrollArea className="flex-1 h-0 px-3 py-3">
+                {!projectTags.length ? (
+                  <p className="text-sm text-gray-500">No tags.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {projectTags
+                      .slice()
+                      .sort((a, b) => a.name.localeCompare(b.name))
+                      .map((t) => {
+                        const currentHex = toHex(t.r as number | undefined, t.g as number | undefined, t.b as number | undefined);
+                        const draftRgb = hslToRgb(hslDraft.h, hslDraft.s, hslDraft.l);
+                        const liveHex = openPickerTag === String(t._id) ? toHex(draftRgb.r, draftRgb.g, draftRgb.b) : currentHex;
+                        return (
+                          <div
+                            key={String(t._id)}
+                            className="flex items-center gap-3 p-2 border rounded-md bg-white"
+                          >
+                            <Popover
+                              open={openPickerTag === String(t._id)}
+                              onOpenChange={(o) => {
+                                if (o) {
+                                  const r = (t.r as number | undefined) ?? 79;
+                                  const g = (t.g as number | undefined) ?? 70;
+                                  const b = (t.b as number | undefined) ?? 229;
+                                  setHslDraft(rgbToHsl(r, g, b));
+                                  setOpenPickerTag(String(t._id));
+                                } else {
                                   setOpenPickerTag(null);
-                                }}>
-                                  <HslColorPicker
-                                    color={hslDraft}
-                                    onChange={(c: { h: number; s: number; l: number }) => setHslDraft(c)}
-                                  />
-                                </PopoverContent>
-                              </Popover>
-                              <div className="text-sm text-gray-800 truncate max-w-[220px]">
-                                {t.name.length > 25 ? t.name.slice(0, 25) + "…" : t.name}
-                              </div>
+                                }
+                              }}
+                            >
+                              <PopoverTrigger asChild>
+                                <button
+                                  type="button"
+                                  className="w-8 h-8 rounded border"
+                                  style={{ backgroundColor: liveHex }}
+                                />
+                              </PopoverTrigger>
+                              <PopoverContent className="w-auto p-3 bg-white shadow-lg border" onPointerUp={async () => {
+                                const { r, g, b } = hslToRgb(hslDraft.h, hslDraft.s, hslDraft.l);
+                                await setColor({ tagId: t._id, r, g, b });
+                                setOpenPickerTag(null);
+                              }}>
+                                <HslColorPicker
+                                  color={hslDraft}
+                                  onChange={(c: { h: number; s: number; l: number }) => setHslDraft(c)}
+                                />
+                              </PopoverContent>
+                            </Popover>
+                            <div className="text-sm text-gray-800 truncate max-w-[220px]">
+                              {t.name.length > 25 ? t.name.slice(0, 25) + "…" : t.name}
                             </div>
-                          );
-                        })}
-                    </div>
-                  )}
-                </ScrollArea>
-              </TabsContent>
-            ) : null}
+                          </div>
+                        );
+                      })}
+                  </div>
+                )}
+              </ScrollArea>
+            </TabsContent>
           </Tabs>
         )}
       </div>
