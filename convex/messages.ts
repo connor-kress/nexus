@@ -23,8 +23,8 @@ type SummaryResponse = {
 
 type NoteWithTags = { note: Doc<"notes">; tags: Array<Doc<"tags">> };
 
-const DEFAULT_MODEL = "x-ai/grok-4-fast:free";
-// const DEFAULT_MODEL = "openai/gpt-5-nano";
+// const DEFAULT_MODEL = "x-ai/grok-4-fast:free";
+const DEFAULT_MODEL = "openai/gpt-5-nano";
 
 function getSummaryPrompt(allMessages: Array<Doc<"messages">>, notes: Array<NoteWithTags>, latestMessage: string) {
   return [
@@ -117,7 +117,7 @@ function getReplyPrompt(
     {
       role: "system",
       content:
-        "You are a helpful assistant for a project. Use the provided project notes as context. If the notes contain relevant facts or decisions, incorporate them in your reply. Keep responses concise and practical.",
+        "You are a helpful assistant for a project. Use the provided project notes as context. If the notes contain relevant facts or decisions, incorporate them in your reply. Keep responses concise and practical. Do not mention or update the notes in your responses.",
     },
     {
       role: "user",

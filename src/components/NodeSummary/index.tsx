@@ -38,6 +38,7 @@ export default function NodeSummaryPanel({
 }: Props) {
   const [tab, setTab] = React.useState<"proposed" | "accepted">("proposed");
   const [savingAll, setSavingAll] = React.useState(false);
+  const [rejectingAll, setRejectingAll] = React.useState(false);
   const [selectedTags, setSelectedTags] = React.useState<string[]>([]);
 
   const notesWithTags =
@@ -79,12 +80,27 @@ export default function NodeSummaryPanel({
   );
 
   const handleSaveAll = async () => {
-    if (!proposedNodes?.length || !onSaveMany) return;
+    if (!filteredProposed?.length) return;
     try {
       setSavingAll(true);
-      await onSaveMany(proposedNodes.map((n) => n.id));
+      if (onSaveMany) {
+        await onSaveMany(filteredProposed.map((n) => n.id));
+      } else if (onSaveOne) {
+        // Fallback: call per-item if bulk handler not provided
+        for (const n of filteredProposed) await onSaveOne(n.id);
+      }
     } finally {
       setSavingAll(false);
+    }
+  };
+
+  const handleRejectAll = async () => {
+    if (!filteredProposed?.length || !onRejectOne) return;
+    try {
+      setRejectingAll(true);
+      for (const n of filteredProposed) await onRejectOne(n.id);
+    } finally {
+      setRejectingAll(false);
     }
   };
 
@@ -241,13 +257,22 @@ export default function NodeSummaryPanel({
                       ? `${proposedNodes.length} proposed node${proposedNodes.length > 1 ? "s" : ""}`
                       : "No proposed nodes"}
                 </span>
-                <Button
-                  onClick={handleSaveAll}
-                  disabled={!proposedNodes?.length || savingAll}
-                  className="text-white"
-                >
-                  {savingAll ? "Saving…" : "Save all proposed nodes"}
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    onClick={handleRejectAll}
+                    variant="destructive"
+                    disabled={!filteredProposed?.length || rejectingAll}
+                  >
+                    {rejectingAll ? "Rejecting…" : "Reject All"}
+                  </Button>
+                  <Button
+                    onClick={handleSaveAll}
+                    disabled={!filteredProposed?.length || savingAll}
+                    className="text-white"
+                  >
+                    {savingAll ? "Accepting…" : "Accept All"}
+                  </Button>
+                </div>
               </div>
             </TabsContent>
 
