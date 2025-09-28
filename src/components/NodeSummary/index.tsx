@@ -20,7 +20,6 @@ type Props = {
   onSaveOne?: (id: string) => Promise<void> | void;
   onRejectOne?: (id: string) => Promise<void> | void;
   onSaveMany?: (ids: string[]) => Promise<void> | void;
-  onTabChange?: (tab: "proposed" | "accepted") => void;
   className?: string;
   selectedNoteId?: Id<"notes"> | null;
   onClear?: () => void;
@@ -33,7 +32,6 @@ export default function NodeSummaryPanel({
   onSaveOne,
   onRejectOne,
   onSaveMany,
-  onTabChange,
   className,
   selectedNoteId,
   onClear,
@@ -41,10 +39,6 @@ export default function NodeSummaryPanel({
   const [tab, setTab] = React.useState<"proposed" | "accepted">("proposed");
   const [savingAll, setSavingAll] = React.useState(false);
   const [selectedTags, setSelectedTags] = React.useState<string[]>([]);
-
-  React.useEffect(() => {
-    onTabChange?.(tab);
-  }, [tab, onTabChange]);
 
   const notesWithTags =
     useQuery(api.notes.listWithTags, projectId ? { projectId } : "skip") ?? [];

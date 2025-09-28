@@ -11,6 +11,7 @@ export type NodeItem = {
   summary?: string;
   createdAt?: string | number | Date;
   tokens?: number;
+  updateType?: "create" | "update" | "delete";
 };
 
 type NodeCardProps = {
@@ -38,8 +39,21 @@ export function NodeCard({
     >
       {/* Header row: title + tags/date */}
       <div className="flex items-center justify-between gap-3">
-        <h4 className="text-sm font-medium text-gray-900 truncate">
-          {node.title}
+        <h4 className="text-sm font-medium text-gray-900 truncate flex items-center gap-2">
+          {node.updateType && (
+            <Badge
+              variant="outline"
+              className={cn(
+                "text-[10px] px-1.5 py-0.5",
+                node.updateType === "create" && "bg-green-100 text-green-800 border-green-200",
+                node.updateType === "update" && "bg-blue-100 text-blue-800 border-blue-200",
+                node.updateType === "delete" && "bg-red-100 text-red-800 border-red-200"
+              )}
+            >
+              {node.updateType}
+            </Badge>
+          )}
+          <span className="truncate">{node.title}</span>
         </h4>
         <div className="flex items-center gap-2 shrink-0">
           {typeof node.tokens === "number" && (
