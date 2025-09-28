@@ -66,12 +66,15 @@ export function ChatApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const hasProject = !!selectedProjectId;
+
   return (
     <div className="h-screen bg-gray-100">
       <ResizablePanelGroup
         direction="horizontal"
         className="h-full min-h-0 overflow-hidden"
       >
+        {/* LEFT: Sidebar */}
         <ResizablePanel
           defaultSize={22}
           minSize={16}
@@ -96,9 +99,12 @@ export function ChatApp() {
             </div>
           </div>
         </ResizablePanel>
+
         <ResizableHandle withHandle />
+
+        {/* MIDDLE: Chat / Empty state */}
         <ResizablePanel
-          defaultSize={52}
+          defaultSize={hasProject ? 52 : 78}
           minSize={35}
           className="bg-gray-50 min-h-0 overflow-hidden"
         >
@@ -110,55 +116,52 @@ export function ChatApp() {
             )}
           </div>
         </ResizablePanel>
-        <ResizableHandle withHandle />
-        <ResizablePanel
-          defaultSize={26}
-          minSize={20}
-          className="border-l bg-gray-50 min-h-0 overflow-hidden"
-        >
-          <ResizablePanelGroup
-            direction="vertical"
-            className="h-full min-h-0 overflow-hidden"
-          >
-            <ResizablePanel
-              defaultSize={60}
-              minSize={30}
-              className="border-b bg-gray-50 min-h-0 overflow-hidden"
-            >
-              <div className="h-full overflow-hidden">
-                <GraphPanel
-                  projectId={selectedProjectId}
-                  onSelectNote={setSelectedNoteId}
-                />
-              </div>
-            </ResizablePanel>
+
+        {/* RIGHT: Graph + Summaries — render ONLY when project is selected */}
+        {hasProject && (
+          <>
             <ResizableHandle withHandle />
             <ResizablePanel
-              defaultSize={40}
-              minSize={25}
-              className="bg-gray-50 min-h-0 overflow-hidden"
+              defaultSize={26}
+              minSize={20}
+              className="border-l bg-gray-50 min-h-0 overflow-hidden"
             >
-              <div className="h-full overflow-hidden">
-                {selectedProjectId ? (
-                  <NotesSection
-                    projectId={selectedProjectId}
-                    selectedNoteId={selectedNoteId}
-                    onClear={() => setSelectedNoteId(null)}
-                  />
-                ) : (
-                  <NodeSummaryPanel
-                    projectId={selectedProjectId}
-                    proposedNodes={[]}
-                    acceptedNodes={[]}
-                    onSaveOne={async () => {}}
-                    onRejectOne={async () => {}}
-                    onSaveMany={async () => {}}
-                  />
-                )}
-              </div>
+              <ResizablePanelGroup
+                direction="vertical"
+                className="h-full min-h-0 overflow-hidden"
+              >
+                <ResizablePanel
+                  defaultSize={60}
+                  minSize={30}
+                  className="border-b bg-gray-50 min-h-0 overflow-hidden"
+                >
+                  <div className="h-full overflow-hidden">
+                    <GraphPanel
+                      projectId={selectedProjectId!}
+                      onSelectNote={setSelectedNoteId}
+                    />
+                  </div>
+                </ResizablePanel>
+
+                <ResizableHandle withHandle />
+
+                <ResizablePanel
+                  defaultSize={40}
+                  minSize={25}
+                  className="bg-gray-50 min-h-0 overflow-hidden"
+                >
+                  <div className="h-full overflow-hidden">
+                    <NotesSection
+                      projectId={selectedProjectId!}
+                      selectedNoteId={selectedNoteId}
+                      onClear={() => setSelectedNoteId(null)}
+                    />
+                  </div>
+                </ResizablePanel>
+              </ResizablePanelGroup>
             </ResizablePanel>
-          </ResizablePanelGroup>
-        </ResizablePanel>
+          </>
+        )}
       </ResizablePanelGroup>
     </div>
   );
@@ -180,16 +183,14 @@ function NotesSection({
   const proposedNodes = useMemo(
     () =>
       (updates ?? []).map(
-        (
-          u: {
-            _id: Id<"noteUpdates">;
-            _creationTime: number;
-            type: "create" | "update" | "delete";
-            title: string;
-            match: string;
-            body: string;
-          }
-        ) => ({
+        (u: {
+          _id: Id<"noteUpdates">;
+          _creationTime: number;
+          type: "create" | "update" | "delete";
+          title: string;
+          match: string;
+          body: string;
+        }) => ({
           id: String(u._id),
           title: u.title || u.match || "(untitled)",
           summary: u.body,
@@ -203,13 +204,20 @@ function NotesSection({
 
   const acceptedNodes = useMemo(
     () =>
-      (notes ?? []).map((n: { _id: Id<"notes">; title: string; body: string; _creationTime: number }) => ({
-        id: String(n._id),
-        title: n.title,
-        summary: n.body,
-        createdAt: new Date(n._creationTime),
-        tokens: 0,
-      })),
+      (notes ?? []).map(
+        (n: {
+          _id: Id<"notes">;
+          title: string;
+          body: string;
+          _creationTime: number;
+        }) => ({
+          id: String(n._id),
+          title: n.title,
+          summary: n.body,
+          createdAt: new Date(n._creationTime),
+          tokens: 0,
+        })
+      ),
     [notes]
   );
 

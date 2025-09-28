@@ -129,7 +129,7 @@ export function ChatInterface({ chatId }: ChatInterfaceProps) {
           <Button
             onClick={handleSendMessage}
             disabled={!message.trim() || isLoading}
-            className="px-6"
+            className="px-6 text-white"
           >
             Send
           </Button>
