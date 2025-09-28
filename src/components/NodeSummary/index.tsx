@@ -78,6 +78,44 @@ export default function NodeSummaryPanel({
     [acceptedNodes, matches]
   );
 
+  const notesWithTags =
+    useQuery(api.notes.listWithTags, projectId ? { projectId } : "skip") ?? [];
+
+  const noteIdToTagNames = React.useMemo(() => {
+    const m = new Map<string, string[]>();
+    for (const nt of notesWithTags) {
+      m.set(
+        String(nt.note._id),
+        nt.tags.map((t) => t.name)
+      );
+    }
+    return m;
+  }, [notesWithTags]);
+
+  const allTagNames = React.useMemo(() => {
+    const s = new Set<string>();
+    for (const nt of notesWithTags) for (const t of nt.tags) s.add(t.name);
+    return Array.from(s).sort((a, b) => a.localeCompare(b));
+  }, [notesWithTags]);
+
+  const matches = React.useCallback(
+    (node: NodeItem) => {
+      if (!selectedTags.length) return true;
+      const tags = noteIdToTagNames.get(String(node.id)) ?? [];
+      return selectedTags.every((t) => tags.includes(t));
+    },
+    [noteIdToTagNames, selectedTags]
+  );
+
+  const filteredProposed = React.useMemo(
+    () => proposedNodes.filter(matches),
+    [proposedNodes, matches]
+  );
+  const filteredAccepted = React.useMemo(
+    () => acceptedNodes.filter(matches),
+    [acceptedNodes, matches]
+  );
+
   const handleSaveAll = async () => {
     if (!proposedNodes?.length || !onSaveMany) return;
     try {
