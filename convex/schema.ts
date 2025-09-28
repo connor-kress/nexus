@@ -62,6 +62,15 @@ const applicationTables = {
     .index("by_project", ["projectId"])
     .index("by_user_and_project", ["userId", "projectId"]),
 
+  // Memberships: many users per chat
+  chatUsers: defineTable({
+    chatId: v.id("chats"),
+    userId: v.id("users"),
+  })
+    .index("by_user", ["userId"])
+    .index("by_chat", ["chatId"])
+    .index("by_user_and_chat", ["userId", "chatId"]),
+
   // Project invitations referencing users via foreign key
   invitations: defineTable({
     projectId: v.id("projects"),

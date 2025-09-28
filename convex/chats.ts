@@ -16,7 +16,9 @@ export const create = mutation({
     // Verify membership in project
     const membership = await ctx.db
       .query("projectUsers")
-      .withIndex("by_user_and_project", (q) => q.eq("userId", userId).eq("projectId", args.projectId))
+      .withIndex("by_user_and_project", (q) =>
+        q.eq("userId", userId).eq("projectId", args.projectId)
+      )
       .unique()
       .catch(() => null);
     if (!membership) {
@@ -41,7 +43,9 @@ export const listByProject = query({
     // Verify membership
     const membership = await ctx.db
       .query("projectUsers")
-      .withIndex("by_user_and_project", (q) => q.eq("userId", userId).eq("projectId", args.projectId))
+      .withIndex("by_user_and_project", (q) =>
+        q.eq("userId", userId).eq("projectId", args.projectId)
+      )
       .unique()
       .catch(() => null);
     if (!membership) return [];
@@ -67,11 +71,161 @@ export const get = query({
 
     const membership = await ctx.db
       .query("projectUsers")
-      .withIndex("by_user_and_project", (q) => q.eq("userId", userId).eq("projectId", chat.projectId))
+      .withIndex("by_user_and_project", (q) =>
+        q.eq("userId", userId).eq("projectId", chat.projectId)
+      )
       .unique()
       .catch(() => null);
     if (!membership) throw new Error("Chat not found");
 
     return chat;
+  },
+});
+
+export const listChatUsers = query({
+  args: {
+    chatId: v.id("chats"),
+    limit: v.optional(v.number()),
+  },
+  returns: v.array(
+    v.object({
+      userId: v.id("users"),
+      name: v.optional(v.string()),
+      email: v.string(),
+    })
+  ),
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
+
+    const chat = await ctx.db.get(args.chatId);
+    if (!chat) return [];
+
+    const membership = await ctx.db
+      .query("projectUsers")
+      .withIndex("by_user_and_project", (q) =>
+        q.eq("userId", userId).eq("projectId", chat.projectId)
+      )
+      .unique()
+      .catch(() => null);
+    if (!membership) return [];
+
+    const links = await ctx.db
+      .query("chatUsers")
+      .withIndex("by_chat", (q) => q.eq("chatId", args.chatId))
+      .collect();
+
+    const slice =
+      typeof args.limit === "number" ? links.slice(0, args.limit) : links;
+
+    const results: { userId: any; name?: string; email: string }[] = [];
+    for (const link of slice) {
+      const u = await ctx.db.get(link.userId);
+      results.push({
+        userId: link.userId,
+        name: (u as any)?.name ?? undefined,
+        email: (u as any)?.email ?? "",
+      });
+    }
+    return results;
+  },
+});
+
+export const join = mutation({
+  args: { chatId: v.id("chats") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+
+    const chat = await ctx.db.get(args.chatId);
+    if (!chat) throw new Error("Chat not found");
+
+    // must be a member of the project
+    const member = await ctx.db
+      .query("projectUsers")
+      .withIndex("by_user_and_project", (q) =>
+        q.eq("userId", userId).eq("projectId", chat.projectId)
+      )
+      .unique()
+      .catch(() => null);
+    if (!member) throw new Error("Not in project");
+
+    // already in chat?
+    const existing = await ctx.db
+      .query("chatUsers")
+      .withIndex("by_user_and_chat", (q) =>
+        q.eq("userId", userId).eq("chatId", args.chatId)
+      )
+      .unique()
+      .catch(() => null);
+
+    if (!existing) {
+      await ctx.db.insert("chatUsers", { chatId: args.chatId, userId });
+    }
+    return null;
+  },
+});
+
+export const leave = mutation({
+  args: { chatId: v.id("chats") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+
+    const link = await ctx.db
+      .query("chatUsers")
+      .withIndex("by_user_and_chat", (q) =>
+        q.eq("userId", userId).eq("chatId", args.chatId)
+      )
+      .unique()
+      .catch(() => null);
+
+    if (link) {
+      await ctx.db.delete(link._id);
+    }
+    return null;
+  },
+});
+
+export const leaveAll = mutation({
+  args: {},
+  returns: v.number(),
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+
+    const links = await ctx.db
+      .query("chatUsers")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+
+    for (const l of links) await ctx.db.delete(l._id);
+    return links.length;
+  },
+});
+
+export const leaveAllInProject = mutation({
+  args: { projectId: v.id("projects") },
+  returns: v.number(),
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+
+    const links = await ctx.db
+      .query("chatUsers")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+
+    let count = 0;
+    for (const l of links) {
+      const chat = await ctx.db.get(l.chatId);
+      if (chat && chat.projectId === args.projectId) {
+        await ctx.db.delete(l._id);
+        count++;
+      }
+    }
+    return count;
   },
 });

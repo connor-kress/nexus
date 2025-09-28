@@ -7,6 +7,8 @@ import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { MemberCollapse } from "./MemberCollapse";
+import { ChatAvatarStack } from "./ChatAvatarStack";
 
 interface SidebarProps {
   selectedProjectId: Id<"projects"> | null;
@@ -38,6 +40,22 @@ export function Sidebar({
     api.projects.get,
     selectedProjectId ? { id: selectedProjectId } : "skip"
   );
+
+  const joinChat = useMutation(api.chats.join);
+  const leaveChat = useMutation(api.chats.leave);
+
+  function handleSelectChat(nextId: Id<"chats">) {
+    // optimistically switch UI first
+    const prev = selectedChatId;
+    onChatSelect(nextId);
+
+    // fire-and-forget mutations (no user-blocking)
+    if (prev && prev !== nextId) {
+      leaveChat({ chatId: prev }).catch(() => {});
+    }
+    joinChat({ chatId: nextId }).catch(() => {});
+  }
+
   const myRole = useQuery(
     api.projects.membershipRole,
     selectedProjectId ? { id: selectedProjectId } : "skip"
@@ -207,7 +225,13 @@ export function Sidebar({
     }
   };
 
+  const leaveAllInProject = useMutation(api.chats.leaveAllInProject);
+
   const handleBackToProjects = () => {
+    if (selectedProjectId) {
+      // fire-and-forget; keep UI snappy
+      leaveAllInProject({ projectId: selectedProjectId }).catch(() => {});
+    }
     onProjectSelect(null);
     onChatSelect(null);
   };
@@ -308,6 +332,14 @@ export function Sidebar({
           </div>
 
           <div className="flex-1 overflow-y-auto p-4">
+            {selectedProjectId && (
+              <MemberCollapse
+                projectId={selectedProjectId}
+                myRole={(myRole as any) ?? null}
+                onInviteClick={() => setShowInvite(true)}
+                defaultOpen={true}
+              />
+            )}
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-sm font-medium text-gray-700">Chats</h3>
               <Button
@@ -356,16 +388,24 @@ export function Sidebar({
               {chats?.map((chat) => (
                 <button
                   key={chat._id}
-                  onClick={() => onChatSelect(chat._id)}
-                  className={`w-full text-left p-3 rounded-lg transition-colors ${
+                  onClick={() => handleSelectChat(chat._id)}
+                  className={`w-full p-3 rounded-lg transition-colors ${
                     selectedChatId === chat._id
                       ? "bg-blue-50 text-blue-700 border border-blue-200"
                       : "hover:bg-gray-50 text-gray-700"
                   }`}
                 >
-                  <div className="font-medium truncate">{chat.name}</div>
-                  <div className="text-xs text-gray-500 mt-1">
-                    {new Date(chat._creationTime).toLocaleDateString()}
+                  <div className="flex items-center justify-between gap-3">
+                    {/* Left: name + date */}
+                    <div className="min-w-0">
+                      <div className="font-medium truncate">{chat.name}</div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        {new Date(chat._creationTime).toLocaleDateString()}
+                      </div>
+                    </div>
+
+                    {/* Right: tiny avatar stack */}
+                    <ChatAvatarStack chatId={chat._id} max={4} />
                   </div>
                 </button>
               ))}
@@ -427,6 +467,9 @@ export function Sidebar({
           {showNewProject && (
             <div className="mb-4 p-3 bg-gray-50 rounded-lg">
               <Input
+                ref={(input) => {
+                  if (input) input.focus();
+                }}
                 placeholder="Project name"
                 value={newProjectName}
                 onChange={(e) => setNewProjectName(e.target.value)}
@@ -434,13 +477,18 @@ export function Sidebar({
                 onKeyDown={(e) => e.key === "Enter" && handleCreateProject()}
               />
               <div className="flex gap-2">
-                <Button size="sm" onClick={handleCreateProject}>
+                <Button
+                  size="sm"
+                  onClick={handleCreateProject}
+                  className="text-white"
+                >
                   Create
                 </Button>
                 <Button
                   size="sm"
                   variant="ghost"
                   onClick={() => setShowNewProject(false)}
+                  className="hover:text-white"
                 >
                   Cancel
                 </Button>
