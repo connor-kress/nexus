@@ -11,6 +11,7 @@ const applicationTables = {
   chats: defineTable({
     name: v.string(),
     projectId: v.id("projects"),
+    loading: v.boolean(),
   }).index("by_project", ["projectId"]),
 
   messages: defineTable({
@@ -48,7 +49,7 @@ const applicationTables = {
     .index("by_note", ["noteId"])
     .index("by_tag", ["tagId"])
     .index("by_note_and_tag", ["noteId", "tagId"])
-    .index("by_update", ["noteUpdateId"]) 
+    .index("by_update", ["noteUpdateId"])
     .index("by_update_and_tag", ["noteUpdateId", "tagId"]),
 
   // Note updates queue/log
@@ -66,8 +67,8 @@ const applicationTables = {
     body: v.string(),
   })
     .index("by_project", ["projectId"])
-    .index("by_user", ["userId"]) 
-    .index("by_user_and_project", ["userId", "projectId"]) 
+    .index("by_user", ["userId"])
+    .index("by_user_and_project", ["userId", "projectId"])
     .index("by_user_project_and_type", ["userId", "projectId", "type"]),
 
   // Memberships: many users per project

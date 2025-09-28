@@ -26,7 +26,11 @@ type NoteWithTags = { note: Doc<"notes">; tags: Array<Doc<"tags">> };
 // const DEFAULT_MODEL = "x-ai/grok-4-fast:free";
 const DEFAULT_MODEL = "openai/gpt-5-nano";
 
-function getSummaryPrompt(allMessages: Array<Doc<"messages">>, notes: Array<NoteWithTags>, latestMessage: string) {
+function getSummaryPrompt(
+  allMessages: Array<Doc<"messages">>,
+  notes: Array<NoteWithTags>,
+  latestMessage: string
+) {
   return [
     {
       role: "system",
@@ -94,18 +98,18 @@ function getSummaryPrompt(allMessages: Array<Doc<"messages">>, notes: Array<Note
   }
 
   Reminder: ONLY RESPOND WITH VALID JSON.
-      `
+      `,
     },
     {
       role: "user",
       content: `
   Here are the current project notes in JSON:
-  ${JSON.stringify(notes, null, 2)}`
+  ${JSON.stringify(notes, null, 2)}`,
     },
     {
       role: "user",
-      content: `Now propose updates based on the latest user message: """${latestMessage}"""`
-    }
+      content: `Now propose updates based on the latest user message: """${latestMessage}"""`,
+    },
   ];
 }
 
@@ -230,6 +234,12 @@ export const sendMessage = action({
     content: v.string(),
   },
   handler: async (ctx, args): Promise<string | null> => {
+    // Mark chat as loading ASAP (so UI can lock across clients)
+    await ctx.runMutation(api.chats.setLoading, {
+      chatId: args.chatId,
+      loading: true,
+    });
+
     const userMessageId = await ctx.runMutation(api.messages.add, {
       chatId: args.chatId,
       content: args.content,
@@ -237,16 +247,13 @@ export const sendMessage = action({
     });
 
     const messages: Array<{ role: "user" | "assistant"; content: string }> =
-      await ctx.runQuery(api.messages.list, {
-        chatId: args.chatId,
-      });
+      await ctx.runQuery(api.messages.list, { chatId: args.chatId });
 
-    const openRouterMessages: Array<{ role: string; content: string }> = messages.map((msg) => ({
-      role: msg.role,
-      content: msg.content,
+    const openRouterMessages = messages.map((m) => ({
+      role: m.role,
+      content: m.content,
     }));
 
-    // Load notes context for this chat's project and build a reply prompt
     const chat = await ctx.runQuery(api.chats.get, { id: args.chatId });
     const notesForReply: Array<NoteWithTags> = await ctx.runQuery(
       api.notes.listWithTags,
@@ -256,9 +263,8 @@ export const sendMessage = action({
 
     let assistantMessage: string | null = null;
 
-    // First block: generate and write the assistant reply; rollback on failure
+    // ---------- Generate assistant reply ----------
     try {
-      // simulate a failure
       const response: Response = await fetch(
         "https://openrouter.ai/api/v1/chat/completions",
         {
@@ -291,24 +297,40 @@ export const sendMessage = action({
         role: "assistant",
       });
     } catch (error) {
-      // Rollback the just-inserted user message on first reply failure
+      // Roll back the just-inserted user message on failure
       try {
-        await ctx.runMutation(api.messages.remove, { messageId: userMessageId });
+        await ctx.runMutation(api.messages.remove, {
+          messageId: userMessageId,
+        });
       } catch (rollbackError) {
         console.error("Failed to rollback user message:", rollbackError);
       }
       console.error("Error getting or writing assistant reply:", error);
+
+      await ctx.runMutation(api.chats.setLoading, {
+        chatId: args.chatId,
+        loading: false,
+      });
+
       throw new Error("Failed to get AI response");
     }
 
-    // Second block: best-effort summary & note creation; do not rollback on failure
+    await ctx.runMutation(api.chats.setLoading, {
+      chatId: args.chatId,
+      loading: false,
+    });
+
     try {
       const chat = await ctx.runQuery(api.chats.get, { id: args.chatId });
-      const allMessages: Array<Doc<"messages">> = await ctx.runQuery(api.messages.list, { chatId: args.chatId });
+      const allMessages: Array<Doc<"messages">> = await ctx.runQuery(
+        api.messages.list,
+        { chatId: args.chatId }
+      );
       const notes: Array<NoteWithTags> = await ctx.runQuery(
         api.notes.listWithTags,
         { projectId: chat.projectId }
       );
+
       const summaryPrompt = getSummaryPrompt(allMessages, notes, args.content);
       const sumRes: Response = await fetch(
         "https://openrouter.ai/api/v1/chat/completions",
@@ -325,27 +347,18 @@ export const sendMessage = action({
           }),
         }
       );
-      if (!sumRes.ok) {
+      if (!sumRes.ok)
         throw new Error(`OpenRouter summary error: ${sumRes.statusText}`);
-      }
+
       const sumData: any = await sumRes.json();
       const raw = sumData.choices?.[0]?.message?.content ?? "";
-      let debug = true; // TODO: update
-      if (debug) console.log("DATA =", raw);
       let parsed: SummaryResponse;
       try {
         parsed = JSON.parse(raw);
-        if (debug) console.log("PARSED =", parsed);
-      } catch (error) {
-        if (debug) console.log("PARSING ERROR =", error);
-        return assistantMessage;
+      } catch {
+        return assistantMessage; // ignore summary parse errors
       }
-      // const tagNames = Array.isArray(parsed.tags)
-      //   ? parsed.tags
-      //       .map((t) => String(t).toLowerCase().trim())
-      //       .filter((t) => t.length > 0)
-      //       .slice(0, 5)
-      //   : [];
+
       for (const note of parsed.new) {
         await ctx.runMutation(api.notes.enqueueUpdate, {
           projectId: chat.projectId,

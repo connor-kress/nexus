@@ -264,7 +264,6 @@ function GraphPanel({ projectId, onSelectNote }: GraphPanelProps) {
 
   return (
     <div className="h-full w-full overflow-auto p-3">
-      <div className="text-sm font-medium text-gray-600 mb-2">Graph</div>
       <div
         ref={containerRef}
         onMouseMove={(e) => {
