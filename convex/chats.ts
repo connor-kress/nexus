@@ -28,6 +28,7 @@ export const create = mutation({
     return await ctx.db.insert("chats", {
       name: args.name,
       projectId: args.projectId,
+      loading: false,
     });
   },
 });
@@ -227,5 +228,54 @@ export const leaveAllInProject = mutation({
       }
     }
     return count;
+  },
+});
+
+export const setLoading = mutation({
+  args: { chatId: v.id("chats"), loading: v.boolean() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+
+    const chat = await ctx.db.get(args.chatId);
+    if (!chat) throw new Error("Chat not found");
+
+    // must be a member of the project
+    const member = await ctx.db
+      .query("projectUsers")
+      .withIndex("by_user_and_project", (q) =>
+        q.eq("userId", userId).eq("projectId", chat.projectId)
+      )
+      .unique()
+      .catch(() => null);
+    if (!member) throw new Error("Not in project");
+
+    await ctx.db.patch(args.chatId, { loading: args.loading });
+    return null;
+  },
+});
+
+export const isLoading = query({
+  args: { chatId: v.id("chats") },
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+
+    const chat = await ctx.db.get(args.chatId);
+    if (!chat) throw new Error("Chat not found");
+
+    const member = await ctx.db
+      .query("projectUsers")
+      .withIndex("by_user_and_project", (q) =>
+        q.eq("userId", userId).eq("projectId", chat.projectId)
+      )
+      .unique()
+      .catch(() => null);
+    if (!member) throw new Error("Not in project");
+
+    // If somehow missing (older rows), treat undefined as false
+    return !!(chat as any).loading;
   },
 });

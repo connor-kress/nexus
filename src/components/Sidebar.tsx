@@ -191,7 +191,7 @@ export function Sidebar({
       });
       setNewChatName("");
       setShowNewChat(false);
-      onChatSelect(chatId);
+      handleSelectChat(chatId);
       toast.success("Chat created successfully!");
     } catch (error) {
       toast.error("Failed to create chat");
