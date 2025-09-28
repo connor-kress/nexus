@@ -11,8 +11,10 @@ import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
+import TagsMultiSelect from "./TagsMultiSelect";
 
 type Props = {
+  projectId: Id<"projects"> | null;
   proposedNodes?: NodeItem[];
   acceptedNodes?: NodeItem[];
   onSaveOne?: (id: string) => Promise<void> | void;
@@ -25,6 +27,7 @@ type Props = {
 };
 
 export default function NodeSummaryPanel({
+  projectId,
   proposedNodes = [],
   acceptedNodes = [],
   onSaveOne,
@@ -37,10 +40,49 @@ export default function NodeSummaryPanel({
 }: Props) {
   const [tab, setTab] = React.useState<"proposed" | "accepted">("proposed");
   const [savingAll, setSavingAll] = React.useState(false);
+  const [selectedTags, setSelectedTags] = React.useState<string[]>([]);
 
   React.useEffect(() => {
     onTabChange?.(tab);
   }, [tab, onTabChange]);
+
+  const notesWithTags =
+    useQuery(api.notes.listWithTags, projectId ? { projectId } : "skip") ?? [];
+
+  const noteIdToTagNames = React.useMemo(() => {
+    const m = new Map<string, string[]>();
+    for (const nt of notesWithTags) {
+      m.set(
+        String(nt.note._id),
+        nt.tags.map((t) => t.name)
+      );
+    }
+    return m;
+  }, [notesWithTags]);
+
+  const allTagNames = React.useMemo(() => {
+    const s = new Set<string>();
+    for (const nt of notesWithTags) for (const t of nt.tags) s.add(t.name);
+    return Array.from(s).sort((a, b) => a.localeCompare(b));
+  }, [notesWithTags]);
+
+  const matches = React.useCallback(
+    (node: NodeItem) => {
+      if (!selectedTags.length) return true;
+      const tags = noteIdToTagNames.get(String(node.id)) ?? [];
+      return selectedTags.every((t) => tags.includes(t));
+    },
+    [noteIdToTagNames, selectedTags]
+  );
+
+  const filteredProposed = React.useMemo(
+    () => proposedNodes.filter(matches),
+    [proposedNodes, matches]
+  );
+  const filteredAccepted = React.useMemo(
+    () => acceptedNodes.filter(matches),
+    [acceptedNodes, matches]
+  );
 
   const handleSaveAll = async () => {
     if (!proposedNodes?.length || !onSaveMany) return;
@@ -74,8 +116,13 @@ export default function NodeSummaryPanel({
 
   return (
     <div className={cn("h-full w-full p-3 flex flex-col min-h-0", className)}>
-      <div className="text-sm font-medium text-gray-600 mb-2">Node Summary</div>
-
+      <div className="flex items-center justify-between mb-2">
+        <TagsMultiSelect
+          allTags={allTagNames}
+          value={selectedTags}
+          onChange={setSelectedTags}
+        />
+      </div>
       <div className="flex-1 min-h-0 rounded-xl border border-gray-200 bg-white shadow-sm flex flex-col">
         {selectedNoteId && note ? (
           <div className="h-full px-3 py-3">
@@ -149,13 +196,17 @@ export default function NodeSummaryPanel({
                 <TabsTrigger value="proposed">
                   Proposed
                   <Badge className="ml-2 text-white">
-                    {proposedNodes?.length}
+                    {selectedTags.length
+                      ? filteredProposed.length
+                      : proposedNodes.length}
                   </Badge>
                 </TabsTrigger>
                 <TabsTrigger value="accepted">
                   Accepted
                   <Badge className="ml-2 text-white">
-                    {acceptedNodes?.length}
+                    {selectedTags.length
+                      ? filteredAccepted.length
+                      : acceptedNodes.length}
                   </Badge>
                 </TabsTrigger>
               </TabsList>
@@ -166,13 +217,14 @@ export default function NodeSummaryPanel({
               className="flex-1 flex flex-col min-h-0 p-0 data-[state=inactive]:hidden"
             >
               <ScrollArea className="flex-1 h-0 px-3 py-3">
-                {proposedNodes.length === 0 ? (
+                {filteredProposed.length === 0 ? (
                   <p className="text-sm text-gray-500">
-                    No proposed nodes yet.
+                    No proposed nodes
+                    {selectedTags.length ? " matching filter" : ""}.
                   </p>
                 ) : (
                   <div className="space-y-3">
-                    {proposedNodes.map((n) => (
+                    {filteredProposed.map((n) => (
                       <NodeCard
                         key={n.id}
                         node={n}
@@ -187,9 +239,13 @@ export default function NodeSummaryPanel({
 
               <div className="border-t bg-white px-3 py-3 flex items-center justify-between">
                 <span className="text-xs text-gray-500">
-                  {proposedNodes?.length
-                    ? `${proposedNodes?.length} proposed node${proposedNodes?.length > 1 ? "s" : ""}`
-                    : "No proposed nodes"}
+                  {selectedTags.length
+                    ? filteredProposed.length
+                      ? `${filteredProposed.length} proposed node${filteredProposed.length > 1 ? "s" : ""} (filtered)`
+                      : "No proposed nodes match filters"
+                    : proposedNodes.length
+                      ? `${proposedNodes.length} proposed node${proposedNodes.length > 1 ? "s" : ""}`
+                      : "No proposed nodes"}
                 </span>
                 <Button
                   onClick={handleSaveAll}
@@ -206,13 +262,14 @@ export default function NodeSummaryPanel({
               className="flex-1 flex flex-col min-h-0 p-0 data-[state=inactive]:hidden"
             >
               <ScrollArea className="flex-1 h-0 px-3 py-3">
-                {acceptedNodes.length === 0 ? (
+                {filteredAccepted.length === 0 ? (
                   <p className="text-sm text-gray-500">
-                    No accepted nodes yet.
+                    No accepted nodes
+                    {selectedTags.length ? " matching filter" : ""}.
                   </p>
                 ) : (
                   <div className="space-y-3">
-                    {acceptedNodes.map((n) => (
+                    {filteredAccepted.map((n) => (
                       <NodeCard key={n.id} node={n} variant="accepted" />
                     ))}
                   </div>

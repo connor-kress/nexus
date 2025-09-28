@@ -3,8 +3,8 @@ import { mutation, query, action } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { api } from "./_generated/api";
 
-// const DEFAULT_MODEL = "x-ai/grok-4-fast:free";
-const DEFAULT_MODEL = "openai/gpt-5-nano";
+const DEFAULT_MODEL = "x-ai/grok-4-fast:free";
+// const DEFAULT_MODEL = "openai/gpt-5-nano";
 
 export const list = query({
   args: { chatId: v.id("chats") },
