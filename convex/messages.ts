@@ -23,8 +23,8 @@ type SummaryResponse = {
 
 type NoteWithTags = { note: Doc<"notes">; tags: Array<Doc<"tags">> };
 
-// const DEFAULT_MODEL = "x-ai/grok-4-fast:free";
-const DEFAULT_MODEL = "openai/gpt-5-nano";
+const DEFAULT_MODEL = "x-ai/grok-4-fast:free";
+// const DEFAULT_MODEL = "openai/gpt-5-nano";
 
 function getSummaryPrompt(allMessages: Array<Doc<"messages">>, notes: Array<NoteWithTags>, latestMessage: string) {
   return [
