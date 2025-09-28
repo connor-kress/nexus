@@ -66,6 +66,7 @@ export function NodeCard({
             onClick={() => {
               if (onSave) void onSave(node.id);
             }}
+            className="text-white"
           >
             Accept
           </Button>

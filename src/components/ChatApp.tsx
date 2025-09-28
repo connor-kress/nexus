@@ -138,6 +138,7 @@ export function ChatApp() {
                   />
                 ) : (
                   <NodeSummaryPanel
+                    projectId={selectedProjectId}
                     proposedNodes={[]}
                     acceptedNodes={[]}
                     onSaveOne={async () => {}}
@@ -230,6 +231,7 @@ function NotesSection({
 
   return (
     <NodeSummaryPanel
+      projectId={projectId}
       proposedNodes={proposedNodes}
       acceptedNodes={acceptedNodes}
       onSaveOne={handleSaveOne}
