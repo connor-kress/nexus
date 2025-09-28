@@ -13,7 +13,9 @@ interface ChatInterfaceProps {
 export function ChatInterface({ chatId }: ChatInterfaceProps) {
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null); // 👈 ref for input
 
   const messages = useQuery(api.messages.list, { chatId });
   const chat = useQuery(api.chats.get, { id: chatId });
@@ -23,9 +25,15 @@ export function ChatInterface({ chatId }: ChatInterfaceProps) {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
+  // scroll when messages update
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // 👇 focus input whenever chatId changes
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, [chatId]);
 
   const handleSendMessage = async () => {
     if (!message.trim() || isLoading) return;
@@ -66,7 +74,9 @@ export function ChatInterface({ chatId }: ChatInterfaceProps) {
         {messages?.map((msg) => (
           <div
             key={msg._id}
-            className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+            className={`flex ${
+              msg.role === "user" ? "justify-end" : "justify-start"
+            }`}
           >
             <div
               className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
@@ -79,22 +89,28 @@ export function ChatInterface({ chatId }: ChatInterfaceProps) {
             </div>
           </div>
         ))}
-        
+
         {isLoading && (
           <div className="flex justify-start">
             <div className="max-w-xs lg:max-w-md px-4 py-2 rounded-lg bg-gray-200 text-gray-900">
               <div className="flex items-center space-x-2">
                 <div className="flex space-x-1">
                   <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"></div>
-                  <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: "0.1s" }}></div>
-                  <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: "0.2s" }}></div>
+                  <div
+                    className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"
+                    style={{ animationDelay: "0.1s" }}
+                  ></div>
+                  <div
+                    className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"
+                    style={{ animationDelay: "0.2s" }}
+                  ></div>
                 </div>
                 <span className="text-sm">AI is thinking...</span>
               </div>
             </div>
           </div>
         )}
-        
+
         <div ref={messagesEndRef} />
       </div>
 
@@ -102,6 +118,7 @@ export function ChatInterface({ chatId }: ChatInterfaceProps) {
       <div className="p-4 border-t border-gray-200 bg-white">
         <div className="flex space-x-2">
           <Input
+            ref={inputRef}
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             onKeyDown={handleKeyDown}

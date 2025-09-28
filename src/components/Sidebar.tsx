@@ -323,6 +323,9 @@ export function Sidebar({
             {showNewChat && (
               <div className="mb-4 p-3 bg-gray-50 rounded-lg">
                 <Input
+                  ref={(input) => {
+                    if (input) input.focus();
+                  }}
                   placeholder="Chat name"
                   value={newChatName}
                   onChange={(e) => setNewChatName(e.target.value)}
@@ -330,13 +333,18 @@ export function Sidebar({
                   onKeyDown={(e) => e.key === "Enter" && handleCreateChat()}
                 />
                 <div className="flex gap-2">
-                  <Button size="sm" onClick={handleCreateChat}>
+                  <Button
+                    size="sm"
+                    onClick={handleCreateChat}
+                    className="text-white"
+                  >
                     Create
                   </Button>
                   <Button
                     size="sm"
                     variant="ghost"
                     onClick={() => setShowNewChat(false)}
+                    className="hover:text-white"
                   >
                     Cancel
                   </Button>
