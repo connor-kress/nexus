@@ -61,7 +61,9 @@ export const get = query({
 
     const membership = await ctx.db
       .query("projectUsers")
-      .withIndex("by_user_and_project", (q) => q.eq("userId", userId).eq("projectId", args.id))
+      .withIndex("by_user_and_project", (q) =>
+        q.eq("userId", userId).eq("projectId", args.id)
+      )
       .unique()
       .catch(() => null);
     if (!membership) throw new Error("Project not found");
@@ -174,7 +176,11 @@ export const listInvitations = query({
       userEmail: v.string(),
       invitedBy: v.id("users"),
       status: v.optional(
-        v.union(v.literal("pending"), v.literal("accepted"), v.literal("revoked"))
+        v.union(
+          v.literal("pending"),
+          v.literal("accepted"),
+          v.literal("revoked")
+        )
       ),
     })
   ),
@@ -193,12 +199,20 @@ export const listInvitations = query({
 
     const invites = await ctx.db
       .query("invitations")
-      .withIndex("by_project_and_user", (q) => q.eq("projectId", args.projectId))
+      .withIndex("by_project_and_user", (q) =>
+        q.eq("projectId", args.projectId)
+      )
       .order("desc")
       .collect();
 
     const result = [] as Array<{
-      _id: any; _creationTime: number; projectId: any; userId: any; userEmail: string; invitedBy: any; status?: "pending" | "accepted" | "revoked";
+      _id: any;
+      _creationTime: number;
+      projectId: any;
+      userId: any;
+      userEmail: string;
+      invitedBy: any;
+      status?: "pending" | "accepted" | "revoked";
     }>;
     for (const inv of invites) {
       const u = await ctx.db.get(inv.userId);
@@ -255,7 +269,11 @@ export const myInvitations = query({
       projectName: v.string(),
       invitedBy: v.id("users"),
       status: v.optional(
-        v.union(v.literal("pending"), v.literal("accepted"), v.literal("revoked"))
+        v.union(
+          v.literal("pending"),
+          v.literal("accepted"),
+          v.literal("revoked")
+        )
       ),
     })
   ),
@@ -335,5 +353,64 @@ export const rejectInvitation = mutation({
     if (inv.userId !== userId) throw new Error("Not your invitation.");
     await ctx.db.patch(inv._id, { status: "revoked" });
     return null;
+  },
+});
+
+export const listProjectMembers = query({
+  args: { projectId: v.id("projects") },
+  // shape: keep it lean
+  returns: v.array(
+    v.object({
+      _id: v.id("projectUsers"),
+      userId: v.id("users"),
+      role: v.union(v.literal("owner"), v.literal("member")),
+      name: v.optional(v.string()),
+      email: v.string(),
+    })
+  ),
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
+
+    const me = await ctx.db
+      .query("projectUsers")
+      .withIndex("by_user_and_project", (q) =>
+        q.eq("userId", userId).eq("projectId", args.projectId)
+      )
+      .unique()
+      .catch(() => null);
+    if (!me) return [];
+
+    const memberships = await ctx.db
+      .query("projectUsers")
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+      .collect();
+
+    const rows: Array<{
+      _id: any;
+      userId: any;
+      role: "owner" | "member";
+      name?: string;
+      email: string;
+    }> = [];
+
+    for (const m of memberships) {
+      const u = await ctx.db.get(m.userId);
+      rows.push({
+        _id: m._id,
+        userId: m.userId,
+        role: m.role,
+        name: (u as any)?.name ?? undefined,
+        email: (u as any)?.email ?? "",
+      });
+    }
+    // Owners first, then by name/email
+    rows.sort((a, b) => {
+      if (a.role !== b.role) return a.role === "owner" ? -1 : 1;
+      const A = (a.name || a.email).toLowerCase();
+      const B = (b.name || b.email).toLowerCase();
+      return A.localeCompare(B);
+    });
+    return rows;
   },
 });

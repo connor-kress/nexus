@@ -13,6 +13,7 @@ import {
   ResizableHandle,
 } from "@/components/ui/resizable";
 import { useNotes, useNoteUpdates } from "./NodeSummary/hooks/useNotes";
+import React from "react";
 
 function EmptyChat({ email }: { email?: string | null }) {
   return (
@@ -54,6 +55,15 @@ export function ChatApp() {
     null
   );
   const user = useQuery(api.auth.loggedInUser);
+  const leaveAll = useMutation(api.chats.leaveAll);
+
+  React.useEffect(() => {
+    const ran = { current: false } as { current: boolean };
+    if (ran.current) return;
+    ran.current = true;
+    leaveAll().catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="h-screen bg-gray-100">
