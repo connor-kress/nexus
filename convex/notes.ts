@@ -498,6 +498,42 @@ export const applyUpdate = mutation({
   },
 });
 
+export const rejectUpdate = mutation({
+  args: { updateId: v.id("noteUpdates") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+
+    const update = await ctx.db.get(args.updateId);
+    if (!update) return null;
+
+    // Ensure user can reject only their own updates and is a project member
+    if (update.userId !== userId) throw new Error("Forbidden");
+    const membership = await ctx.db
+      .query("projectUsers")
+      .withIndex("by_user_and_project", (q) =>
+        q.eq("userId", userId).eq("projectId", update.projectId)
+      )
+      .unique()
+      .catch(() => null);
+    if (!membership) throw new Error("Forbidden");
+
+    // Remove any tag relations tied to this proposal
+    const proposalTags = await ctx.db
+      .query("notesTags")
+      .withIndex("by_update", (q) => q.eq("noteUpdateId", update._id as any))
+      .collect();
+    for (const rel of proposalTags) {
+      await ctx.db.delete(rel._id);
+    }
+
+    // Remove the update itself
+    await ctx.db.delete(args.updateId);
+    return null;
+  },
+});
+
 // Removed setStatus; status is no longer tracked on notes
 
 export const removeByProjectAndTitle = mutation({

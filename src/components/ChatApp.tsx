@@ -179,6 +179,7 @@ function NotesSection({
   const { notes } = useNotes(projectId);
   const { updates } = useNoteUpdates(projectId);
   const applyUpdate = useMutation(api.notes.applyUpdate);
+  const rejectUpdate = useMutation(api.notes.rejectUpdate);
 
   const proposedNodes = useMemo(
     () =>
@@ -225,8 +226,14 @@ function NotesSection({
     // id refers to the proposed node id, which is the noteUpdates _id
     await applyUpdate({ updateId: id as unknown as Id<"noteUpdates"> });
   };
-  const handleRejectOne = async (_id: string) => {};
-  const handleSaveMany = async (_ids: string[]) => {};
+  const handleRejectOne = async (id: string) => {
+    await rejectUpdate({ updateId: id as unknown as Id<"noteUpdates"> });
+  };
+  const handleSaveMany = async (ids: string[]) => {
+    for (const id of ids) {
+      await applyUpdate({ updateId: id as unknown as Id<"noteUpdates"> });
+    }
+  };
 
   return (
     <NodeSummaryPanel
