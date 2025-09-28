@@ -2,9 +2,112 @@ import { v } from "convex/values";
 import { mutation, query, action } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { api } from "./_generated/api";
+import type { Doc } from "./_generated/dataModel";
+
+type SummaryResponse = {
+  new: Array<{
+    title: string;
+    body: string;
+    tags: string[];
+  }>;
+  updated: Array<{
+    match: string;
+    title: string;
+    body: string;
+    tags: string[];
+  }>;
+  deleted: Array<{
+    match: string;
+  }>;
+};
+
+type NoteWithTags = { note: Doc<"notes">; tags: Array<Doc<"tags">> };
 
 // const DEFAULT_MODEL = "x-ai/grok-4-fast:free";
 const DEFAULT_MODEL = "openai/gpt-5-nano";
+
+function getSummaryPrompt(allMessages: Array<Doc<"messages">>, notes: Array<NoteWithTags>, latestMessage: string) {
+  return [
+    {
+      role: "system",
+      content: `
+  You maintain a knowledge base of project notes. Your job is to propose incremental updates based on new user messages.
+
+  Always output ONLY JSON in this exact shape:
+
+  {
+    "new": [
+      {
+        "title": string (<= 80 chars, UNIQUE across all notes),
+        "body": string (short paragraph OR 3–6 compact bullets with key facts, decisions, next steps),
+        "tags": string[] (1–5 lowercase keywords)
+      }
+    ],
+    "updated": [
+      {
+        "match": string (MUST EXACTLY match the title of an existing note),
+        "title": string (<= 80 chars, UNIQUE, may be updated but must not duplicate another title),
+        "body": string,
+        "tags": string[]
+      }
+    ],
+    "deleted": [
+      { "match": string (MUST EXACTLY match the title of an existing note to remove) }
+    ]
+  }
+
+  Rules:
+  - Always include "new", "updated", and "deleted".
+  - Never produce duplicate titles in "new" or "updated".
+  - "match" must be the exact title of an existing note.
+  - If nothing meaningful changed, return {"new":[],"updated":[],"deleted":[]}.
+  - Do not output free text, explanations, or markdown fences — ONLY valid compact JSON.
+
+  Examples:
+
+  Example 1:
+  Latest user message: "Hello!"
+  Expected output:
+  {"new":[],"updated":[],"deleted":[]}
+
+  Example 2:
+  Latest user message: "The deadline has moved to Q3, not Q2."
+  Given notes:
+  [
+    {
+      "note": { "title": "Project deadline", "body": "Currently set to Q2" },
+      "tags": [ { "name": "timeline" }, { "name": "deadline" } ]
+    }
+  ]
+  Expected output:
+  {
+    "new": [],
+    "updated": [
+      {
+        "match": "Project deadline",
+        "title": "Project deadline",
+        "body": "Deadline updated to Q3.",
+        "tags": ["timeline","deadline"]
+      }
+    ],
+    "deleted": []
+  }
+
+  Reminder: ONLY RESPOND WITH VALID JSON.
+      `
+    },
+    {
+      role: "user",
+      content: `
+  Here are the current project notes in JSON:
+  ${JSON.stringify(notes, null, 2)}`
+    },
+    {
+      role: "user",
+      content: `Now propose updates based on the latest user message: """${latestMessage}"""`
+    }
+  ];
+}
 
 export const list = query({
   args: { chatId: v.id("chats") },
@@ -168,22 +271,13 @@ export const sendMessage = action({
     // Second block: best-effort summary & note creation; do not rollback on failure
     try {
       const chat = await ctx.runQuery(api.chats.get, { id: args.chatId });
-      const allMessages: Array<{
-        role: "user" | "assistant";
-        content: string;
-      }> = await ctx.runQuery(api.messages.list, { chatId: args.chatId });
-      const summaryPrompt = [
-        {
-          role: "system",
-          content:
-            'You produce compact JSON for a knowledge note. Respond only JSON with shape {"title":string,"body":string,"tags":string[]}. Title <= 80 chars. Body is a short paragraph or 3–6 bullets with key decisions, facts, next steps. Tags are 1–5 lowercase keywords.',
-        },
-        ...allMessages.map((m) => ({ role: m.role, content: m.content })),
-        {
-          role: "user",
-          content: `Create a note highlighting the latest user message: """${args.content}"""`,
-        },
-      ];
+      const allMessages: Array<Doc<"messages">> = await ctx.runQuery(api.messages.list, { chatId: args.chatId });
+      const notes: Array<NoteWithTags> =
+        await ctx.runQuery(api.notes.listWithTagsByStatus, {
+          projectId: chat.projectId,
+          status: "accepted",
+        });
+      const summaryPrompt = getSummaryPrompt(allMessages, notes, args.content);
       const sumRes: Response = await fetch(
         "https://openrouter.ai/api/v1/chat/completions",
         {
@@ -204,27 +298,36 @@ export const sendMessage = action({
       }
       const sumData: any = await sumRes.json();
       const raw = sumData.choices?.[0]?.message?.content ?? "";
-      let parsed: { title?: string; body?: string; tags?: string[] } = {};
+      // console.log("********************************************************************");
+      // console.log("DATA =", raw);
+      // console.log("********************************************************************");
+      let parsed: SummaryResponse;
       try {
         parsed = JSON.parse(raw);
-      } catch {
-        parsed = { title: "Chat summary", body: raw, tags: [] };
+        // console.log("********************************************************************");
+        // console.log("PARSED =", parsed);
+        // console.log("********************************************************************");
+      } catch (error) {
+        // console.log("********************************************************************");
+        // console.log("PARSING ERROR =", error);
+        // console.log("********************************************************************");
+        return assistantMessage;
       }
-      const title = (parsed.title ?? "Chat summary").slice(0, 80);
-      const body = (parsed.body ?? "").trim();
-      const tagNames = Array.isArray(parsed.tags)
-        ? parsed.tags
-            .map((t) => String(t).toLowerCase().trim())
-            .filter((t) => t.length > 0)
-            .slice(0, 5)
-        : [];
-      await ctx.runMutation(api.notes.create, {
-        projectId: chat.projectId,
-        title,
-        body,
-        tagNames,
-        status: "pending",
-      });
+      // const tagNames = Array.isArray(parsed.tags)
+      //   ? parsed.tags
+      //       .map((t) => String(t).toLowerCase().trim())
+      //       .filter((t) => t.length > 0)
+      //       .slice(0, 5)
+      //   : [];
+      for (const note of parsed.new) {
+        await ctx.runMutation(api.notes.create, {
+          projectId: chat.projectId,
+          title: note.title,
+          body: note.body,
+          tagNames: note.tags,
+          status: "pending",
+        });
+      }
     } catch (summaryError) {
       console.error("Summary generation failed:", summaryError);
     }
