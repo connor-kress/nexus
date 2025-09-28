@@ -148,11 +148,15 @@ export default function NodeSummaryPanel({
               <TabsList>
                 <TabsTrigger value="proposed">
                   Proposed
-                  <Badge className="ml-2">{proposedNodes?.length}</Badge>
+                  <Badge className="ml-2 text-white">
+                    {proposedNodes?.length}
+                  </Badge>
                 </TabsTrigger>
                 <TabsTrigger value="accepted">
                   Accepted
-                  <Badge className="ml-2">{acceptedNodes?.length}</Badge>
+                  <Badge className="ml-2 text-white">
+                    {acceptedNodes?.length}
+                  </Badge>
                 </TabsTrigger>
               </TabsList>
             </div>
@@ -190,6 +194,7 @@ export default function NodeSummaryPanel({
                 <Button
                   onClick={handleSaveAll}
                   disabled={!proposedNodes?.length || savingAll}
+                  className="text-white"
                 >
                   {savingAll ? "Saving…" : "Save all proposed nodes"}
                 </Button>
