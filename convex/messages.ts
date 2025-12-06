@@ -22,7 +22,7 @@ type SummaryResponse = {
 };
 
 type NoteWithTags = { note: Doc<"notes">; tags: Array<Doc<"tags">> };
-const DEFAULT_MODEL = "x-ai/grok-4-fast:free";
+const DEFAULT_MODEL = "openai/gpt-oss-120b";
 // const DEFAULT_MODEL = "openai/gpt-5-nano";
 
 function getSummaryPrompt(
@@ -276,6 +276,9 @@ export const sendMessage = action({
             model: DEFAULT_MODEL,
             messages: replyPrompt,
             temperature: 0.7,
+            provider: {
+              sort: "throughput",
+            },
           }),
         }
       );
